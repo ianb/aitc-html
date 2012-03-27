@@ -1,0 +1,11 @@
+./async.js
+./auth.js
+./constants.js
+./ext/Observers.js
+./ext/Preferences.js
+./ext/StringBundle.js
+./identity.js
+./keys.js
+./log4moz.js
+./rest.js
+./util.js
