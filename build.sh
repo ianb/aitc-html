@@ -11,7 +11,10 @@ help () {
 }
 
 run_build () {
-    echo
+    mkdir -p build build/ext
+    for file in $(cd modules; find . -type f) ; do
+        ./assemble_imports.py < modules/$file > build/$file
+    done
 }
 
 run_patch () {
