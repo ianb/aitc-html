@@ -6,6 +6,8 @@ import sys
 
 subs = [
     (r'let(\s+)', r'var\1'),
+    (r'const \{.*?\} = Components;', ''),
+    (r'(Cu\.import\(".*?"(?:,[^\)]*)?\);)', r'//\1'),
     ]
 
 

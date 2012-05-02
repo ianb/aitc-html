@@ -42,7 +42,7 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+//Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 /**
  * A service for adding, removing and notifying observers of notifications.
@@ -91,9 +91,9 @@ var Observers = {
     // we can make it.  We could index by topic, but we can't index by callback
     // or thisObject, as far as I know, since the keys to JavaScript hashes
     // (a.k.a. objects) can apparently only be primitive values.
-    var [observer] = this._cache.filter(function(v) v.topic      == topic    &&
+    var observer = this._cache.filter(function(v) {return v.topic      == topic    &&
                                                     v.callback   == callback &&
-                                                    v.thisObject == thisObject);
+                                                    v.thisObject == thisObject;})[0];
     if (observer) {
       this._service.removeObserver(observer, topic);
       this._cache.splice(this._cache.indexOf(observer), 1);

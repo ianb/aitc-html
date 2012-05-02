@@ -1,51 +1,23 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Firefox Sync.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Philipp von Weitershausen <philipp@weitershausen.de>
- *   Richard Newman <rnewman@mozilla.com>
- *   Dan Mills <thunder@mozilla.com>
- *   Anant Narayanan <anant@kix.in>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-Cu.import("resource://services-sync/log4moz.js");
-Cu.import("resource://services-sync/util.js");
-Cu.import("resource://services-sync/identity.js");
-Cu.import("resource://services-sync/constants.js");
 
-const EXPORTED_SYMBOLS = ["RESTRequest", "RESTResponse", "SyncStorageRequest"];
 
-const STORAGE_REQUEST_TIMEOUT = 5 * 60; // 5 minutes
+const EXPORTED_SYMBOLS = [
+  "RESTRequest",
+  "RESTResponse",
+  "TokenAuthenticatedRESTRequest"
+];
+
+//Cu.import("resource://gre/modules/Services.jsm");
+//Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+//Cu.import("resource://services-crypto/utils.js");
+//Cu.import("resource://services-common/log4moz.js");
+//Cu.import("resource://services-common/preferences.js");
+//Cu.import("resource://services-common/utils.js");
+
+const Prefs = new Preferences("services.common.rest.");
 
 /**
  * Single use HTTP requests to RESTish resources.
@@ -66,8 +38,7 @@ const STORAGE_REQUEST_TIMEOUT = 5 * 60; // 5 minutes
  *       return;
  *     }
  *     if (!this.response.success) {
-
- *  *       // Bail out if we're not getting an HTTP 2xx code.
+ *       // Bail out if we're not getting an HTTP 2xx code.
  *       processHTTPError(this.response.status);
  *       return;
  *     }
@@ -116,11 +87,17 @@ function RESTRequest(uri) {
   this._headers = {};
   this._log = Log4Moz.repository.getLogger(this._logName);
   this._log.level =
-    Log4Moz.Level[Svc.Prefs.get("log.logger.network.resources")];
+    Log4Moz.Level[Prefs.get("log.logger.rest.request")];
 }
 RESTRequest.prototype = {
 
-  _logName: "Sync.RESTRequest",
+  _logName: "Services.Common.RESTRequest",
+
+  QueryInterface: XPCOMUtils.generateQI([
+    Ci.nsIBadCertListener2,
+    Ci.nsIInterfaceRequestor,
+    Ci.nsIChannelEventSink
+  ]),
 
   /*** Public API: ***/
 
@@ -138,6 +115,11 @@ RESTRequest.prototype = {
    * RESTResponse object
    */
   response: null,
+
+  /**
+   * nsIRequest load flags. Don't do any caching by default.
+   */
+  loadFlags: Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING,
 
   /**
    * nsIHttpChannel
@@ -249,7 +231,7 @@ RESTRequest.prototype = {
    *
    * @return the request object.
    */
-  delete: function delete_(onComplete, onProgress) {
+  "delete": function delete_(onComplete, onProgress) {
     return this.dispatch("DELETE", null, onComplete, onProgress);
   },
 
@@ -285,12 +267,13 @@ RESTRequest.prototype = {
       this.onProgress = onProgress;
     }
 
-    var req = new XMLHttpRequest();
-    req.open(method, this.uri);
-    this.xmlhttprequest = req;
-    req.onreadystatechange = function () {
-      this.onreadystatechange();
-    };
+    // Create and initialize HTTP channel.
+    var channel = Services.io.newChannelFromURI(this.uri, null, null)
+                          .QueryInterface(Ci.nsIRequest)
+                          .QueryInterface(Ci.nsIHttpChannel);
+    this.channel = channel;
+    channel.loadFlags |= this.loadFlags;
+    channel.notificationCallbacks = this;
 
     // Set request headers.
     var headers = this._headers;
@@ -300,7 +283,7 @@ RESTRequest.prototype = {
       } else {
         this._log.trace("HTTP Header " + key + ": " + headers[key]);
       }
-      req.setRequestHeader(key, headers[key], false);
+      channel.setRequestHeader(key, headers[key], false);
     }
 
     // Set HTTP request body.
@@ -315,13 +298,20 @@ RESTRequest.prototype = {
         this._log.trace(method + " Body: " + data);
       }
 
+      var stream = Cc["@mozilla.org/io/string-input-stream;1"]
+                     .createInstance(Ci.nsIStringInputStream);
+      stream.setData(data, data.length);
+
       var type = headers["content-type"] || "text/plain";
-    } else {
-      data = null;
+      channel.QueryInterface(Ci.nsIUploadChannel);
+      channel.setUploadStream(stream, type, data.length);
     }
+    // We must set this after setting the upload stream, otherwise it
+    // will always be 'PUT'. Yeah, I know.
+    channel.requestMethod = method;
 
     // Blast off!
-    req.send(data);
+    channel.asyncOpen(this, null);
     this.status = this.SENT;
     this.delayTimeout();
     return this;
@@ -332,8 +322,8 @@ RESTRequest.prototype = {
    */
   delayTimeout: function delayTimeout() {
     if (this.timeout) {
-      Utils.namedTimer(this.abortTimeout, this.timeout * 1000, this,
-                       "timeoutTimer");
+      CommonUtils.namedTimer(this.abortTimeout, this.timeout * 1000, this,
+                             "timeoutTimer");
     }
   },
 
@@ -346,7 +336,7 @@ RESTRequest.prototype = {
                                      Cr.NS_ERROR_NET_TIMEOUT);
     if (!this.onComplete) {
       this._log.error("Unexpected error: onComplete not defined in " +
-                      "abortTimeout.");
+                      "abortTimeout.")
       return;
     }
     this.onComplete(error);
@@ -354,35 +344,40 @@ RESTRequest.prototype = {
 
   /*** nsIStreamListener ***/
 
-  onreadystatechange: function onreadystatechange() {
-    var req = this.xmlhttprequest;
-    if (req.readyState == 1) {
-      // .send() has not yet been called
-      return;
-    }
-    if (req.readyState == 2) {
-      // headers have been received
-      if (this.status == this.ABORTED) {
-        this._log.trace("Not proceeding with onreadystatechange, request was aborted.");
-        return;
-      }
-      this.status = this.IN_PROGRESS;
-      var response = this.response = new RESTResponse();
-      response.request = this;
-      response.body = "";
-      this.delayTimeout();
-      return;
-    }
-    if (req.readyState == 3) {
-      // Some content has been received in .responseText, but not complete content
-      this.response.body = req.responseText;
-      this.callOnProgress();
+  onStartRequest: function onStartRequest(channel) {
+    if (this.status == this.ABORTED) {
+      this._log.trace("Not proceeding with onStartRequest, request was aborted.");
       return;
     }
 
-    // Otherwise the request completed
-    this.response.body = req.responseText;
+    try {
+      channel.QueryInterface(Ci.nsIHttpChannel);
+    } catch (ex) {
+      this._log.error("Unexpected error: channel is not a nsIHttpChannel!");
+      this.status = this.ABORTED;
+      channel.cancel(Cr.NS_BINDING_ABORTED);
+      return;
+    }
 
+    this.status = this.IN_PROGRESS;
+
+    this._log.trace("onStartRequest: " + channel.requestMethod + " " +
+                    channel.URI.spec);
+
+    // Create a response object and fill it with some data.
+    var response = this.response = new RESTResponse();
+    response.request = this;
+    response.body = "";
+
+    // Define this here so that we don't have make a new one each time
+    // onDataAvailable() gets called.
+    this._inputStream = Cc["@mozilla.org/scriptableinputstream;1"]
+                          .createInstance(Ci.nsIScriptableInputStream);
+
+    this.delayTimeout();
+  },
+
+  onStopRequest: function onStopRequest(channel, context, statusCode) {
     if (this.timeoutTimer) {
       // Clear the abort timer now that the channel is done.
       this.timeoutTimer.clear();
@@ -390,13 +385,24 @@ RESTRequest.prototype = {
 
     // We don't want to do anything for a request that's already been aborted.
     if (this.status == this.ABORTED) {
-      this._log.trace("Not proceeding with onreadystatechange, request was aborted.");
+      this._log.trace("Not proceeding with onStopRequest, request was aborted.");
       return;
     }
 
+    try {
+      channel.QueryInterface(Ci.nsIHttpChannel);
+    } catch (ex) {
+      this._log.error("Unexpected error: channel not nsIHttpChannel!");
+      this.status = this.ABORTED;
+      return;
+    }
     this.status = this.COMPLETED;
 
-    var statusSuccess = req.status >= 200 && req.status < 400;
+    var statusSuccess = Components.isSuccessCode(statusCode);
+    var uri = channel && channel.URI && channel.URI.spec || "<unknown>";
+    this._log.trace("Channel for " + channel.requestMethod + " " + uri +
+                    " returned status code " + statusCode);
+
     if (!this.onComplete) {
       this._log.error("Unexpected error: onComplete not defined in " +
                       "abortRequest.");
@@ -415,24 +421,36 @@ RESTRequest.prototype = {
       return;
     }
 
-    this._log.debug(this.method + " " + this.uri + " " + this.response.status);
+    this._log.debug(this.method + " " + uri + " " + this.response.status);
 
     // Additionally give the full response body when Trace logging.
     if (this._log.level <= Log4Moz.Level.Trace) {
       this._log.trace(this.method + " body: " + this.response.body);
     }
 
+    delete this._inputStream;
+
     this.onComplete(null);
     this.onComplete = this.onProgress = null;
   },
 
-  onDataAvailable: function callOnProgress() {
+  onDataAvailable: function onDataAvailable(req, cb, stream, off, count) {
+    this._inputStream.init(stream);
+    try {
+      this.response.body += this._inputStream.read(count);
+    } catch (ex) {
+      this._log.warn("Exception thrown reading " + count +
+                     " bytes from the channel.");
+      this._log.debug(CommonUtils.exceptionStr(ex));
+      throw ex;
+    }
+
     try {
       this.onProgress();
     } catch (ex) {
       this._log.warn("Got exception calling onProgress handler, aborting " +
                      this.method + " " + req.URI.spec);
-      this._log.debug("Exception: " + Utils.exceptionStr(ex));
+      this._log.debug("Exception: " + CommonUtils.exceptionStr(ex));
       this.abort();
 
       if (!this.onComplete) {
@@ -450,7 +468,21 @@ RESTRequest.prototype = {
     this.delayTimeout();
   },
 
-  // FIXME: I don't think we can detect redirects with XMLHttpRequest
+  /*** nsIInterfaceRequestor ***/
+
+  getInterface: function(aIID) {
+    return this.QueryInterface(aIID);
+  },
+
+  /*** nsIBadCertListener2 ***/
+
+  notifyCertProblem: function notifyCertProblem(socketInfo, sslStatus, targetHost) {
+    this._log.warn("Invalid HTTPS certificate encountered!");
+    // Suppress invalid HTTPS certificate warnings in the UI.
+    // (The request will still fail.)
+    return true;
+  },
+
   /*** nsIChannelEventSink ***/
   asyncOnChannelRedirect:
     function asyncOnChannelRedirect(oldChannel, newChannel, flags, callback) {
@@ -470,7 +502,6 @@ RESTRequest.prototype = {
   }
 };
 
-
 /**
  * Response object for a RESTRequest. This will be created automatically by
  * the RESTRequest.
@@ -478,7 +509,7 @@ RESTRequest.prototype = {
 function RESTResponse() {
   this._log = Log4Moz.repository.getLogger(this._logName);
   this._log.level =
-    Log4Moz.Level[Svc.Prefs.get("log.logger.network.resources")];
+    Log4Moz.Level[Prefs.get("log.logger.rest.response")];
 }
 RESTResponse.prototype = {
 
@@ -495,11 +526,11 @@ RESTResponse.prototype = {
   get status() {
     var status;
     try {
-      var req = this.request.xmlhttprequest;
-      status = req.status;
+      var channel = this.request.channel.QueryInterface(Ci.nsIHttpChannel);
+      status = channel.responseStatus;
     } catch (ex) {
       this._log.debug("Caught exception fetching HTTP status code:" +
-                      Utils.exceptionStr(ex));
+                      CommonUtils.exceptionStr(ex));
       return null;
     }
     delete this.status;
@@ -512,11 +543,11 @@ RESTResponse.prototype = {
   get success() {
     var success;
     try {
-      var req = this.request.xmlhttprequest;
-      success = req.status >= 200 && req.status < 400;
+      var channel = this.request.channel.QueryInterface(Ci.nsIHttpChannel);
+      success = channel.requestSucceeded;
     } catch (ex) {
       this._log.debug("Caught exception fetching HTTP success flag:" +
-                      Utils.exceptionStr(ex));
+                      CommonUtils.exceptionStr(ex));
       return null;
     }
     delete this.success;
@@ -530,19 +561,13 @@ RESTResponse.prototype = {
     var headers = {};
     try {
       this._log.trace("Processing response headers.");
-      var req = this.request.xmlhttprequest;
-      var headerText = req.getAllResponseHeaders();
-      var match = true;
-      while (match) {
-        match = /^\s*([a-zA-Z0-9-]+):.*/.exec(headerText);
-        if (match) {
-          headers[match[1].toLowerCase()] = req.getResponseHeader(match[1]);
-          headerText = headerText.substr(match.index + match[0].length);
-        }
-      }
+      var channel = this.request.channel.QueryInterface(Ci.nsIHttpChannel);
+      channel.visitResponseHeaders(function (header, value) {
+        headers[header.toLowerCase()] = value;
+      });
     } catch (ex) {
       this._log.debug("Caught exception processing response headers:" +
-                      Utils.exceptionStr(ex));
+                      CommonUtils.exceptionStr(ex));
       return null;
     }
 
@@ -555,4 +580,40 @@ RESTResponse.prototype = {
    */
   body: null
 
+};
+
+/**
+ * Single use MAC authenticated HTTP requests to RESTish resources.
+ *
+ * @param uri
+ *        URI going to the RESTRequest constructor.
+ * @param authToken
+ *        (Object) An auth token of the form {id: (string), key: (string)}
+ *        from which the MAC Authentication header for this request will be
+ *        derived. A token as obtained from
+ *        TokenServerClient.getTokenFromBrowserIDAssertion is accepted.
+ * @param extra
+ *        (Object) Optional extra parameters. Valid keys are: nonce_bytes, ts,
+ *        nonce, and ext. See CrytoUtils.computeHTTPMACSHA1 for information on
+ *        the purpose of these values.
+ */
+function TokenAuthenticatedRESTRequest(uri, authToken, extra) {
+  RESTRequest.call(this, uri);
+  this.authToken = authToken;
+  this.extra = extra || {};
+}
+TokenAuthenticatedRESTRequest.prototype = {
+  __proto__: RESTRequest.prototype,
+
+  dispatch: function dispatch(method, data, onComplete, onProgress) {
+    var sig = CryptoUtils.computeHTTPMACSHA1(
+      this.authToken.id, this.authToken.key, method, this.uri, this.extra
+    );
+
+    this.setHeader("Authorization", sig.getHeader());
+
+    return RESTRequest.prototype.dispatch.call(
+      this, method, data, onComplete, onProgress
+    );
+  }
 };

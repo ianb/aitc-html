@@ -33,7 +33,7 @@ def rewrite_file(content):
     def import_repl(match):
         url = match.group(1)
         filename = posixpath.basename(url)
-        requires.append('# require %r' % filename)
+        requires.append('// @require "%s"' % filename)
         return ''
     new_content = import_re.sub(import_repl, content)
     new_content = JS_TEMPLATE % dict(

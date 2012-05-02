@@ -1,11 +1,72 @@
-./async.js
-./auth.js
-./constants.js
-./ext/Observers.js
-./ext/Preferences.js
-./ext/StringBundle.js
-./identity.js
-./keys.js
-./log4moz.js
-./rest.js
-./util.js
+# These are the core modules we need:
+aitc/modules/client.js
+aitc/modules/main.js
+aitc/modules/manager.js
+aitc/modules/storage.js
+
+# Used by client.js:
+common/log4moz.js
+common/rest.js
+common/preferences.js
+common/utils.js
+crypto/modules/utils.js
+
+# Used by main.js:
+## Webapps.jsm - not included
+## Services.jsm - not included
+## XPCOMUtils.jsm - not included
+## aitc/modules/manager.js - already included
+## log4moz.js - already included
+## preferences.js - already included
+
+# Used by manager.js:
+## Webapps.jsm - not included
+## Services.jsm - not included
+## FileUtils.jsm - not included
+identity/browserid.js
+## aitc/modules/client.js - already included
+## aitc/modules/storage.js - already included
+## log4moz.js - already included
+## preferences.js - already included
+## common/utils.js - already included
+
+# Used by storage.js:
+## NetUtil.jsm - not included
+## Webapps.jsm - not included
+## FileUtils.jsm - not included
+## XPCOMUtils.jsm - not included
+## rest.js - already included
+## log4moz.js - already included
+## preferences.js - already included
+
+# Used by log4moz.js:
+## NetUtil.jsm - not included
+## FileUtils.jsm - not included
+
+# Used by rest.js:
+## Services.jsm - not included
+## XPCOMUtils.jsm - not included
+## crypto/utils.js - already included
+## log4moz.js - already included
+## preferences.js - already included
+## common/utils.js - already included
+
+# Used by preferences.js:
+## Nothing
+
+# Used by common/utils.js:
+## Services.jsm - not included
+## XPCOMUtils.jsm - not included
+## log4moz.js - already included
+
+# Used by crypto/modules/utils.js:
+common/observers.js
+## common/utils.js - already included
+## XPCOMUtils.jsm - not included
+
+# Used by observers.js:
+## XPCOMUtils.jsm - not included
+
+
+# Tests:
+#aitc/tests/unit/test_load_modules.js

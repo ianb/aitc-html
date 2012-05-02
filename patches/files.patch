@@ -1,687 +1,333 @@
-Common subdirectories: orig-modules/ext and modules/ext
-diff -u orig-modules/repllib.js modules/repllib.js
---- orig-modules/repllib.js	2012-03-27 00:20:02.000000000 -0500
-+++ modules/repllib.js	2012-03-26 23:44:57.000000000 -0500
-@@ -0,0 +1,26 @@
-+/* A replacement for a few bits of code that is commonly used and easily reimplemented */
-+
-+var Components = {
-+  Exception: function Components_Exception(message, result) {
-+    return new _Components_Exception(message, result);
-+  }
-+};
-+
-+function _Components_Exception(message, result) {
-+  this.message = this.name = message;
-+  this.result = result;
-+}
-+
-+_Components_Exception.prototype.toString = function toString() {
-+  var e = '[Exception: ' + this.message;
-+  if (this.result) {
-+    e += ' ' + this.result;
-+  }
-+  return e + ']';
-+};
-+
-+var Utils = {
-+  exceptionStr: function (ex) {
-+    return ex + '';
-+  }
-+};
-diff -u orig-modules/rest.js modules/rest.js
---- orig-modules/rest.js	2012-03-27 00:23:26.000000000 -0500
-+++ modules/rest.js	2012-03-27 00:18:48.000000000 -0500
-@@ -38,8 +38,6 @@
-  *
-  * ***** END LICENSE BLOCK ***** */
+diff --recursive -w -u orig-modules/aitc/modules/client.js modules/aitc/modules/client.js
+--- orig-modules/aitc/modules/client.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/aitc/modules/client.js	2012-05-02 17:57:27.000000000 -0500
+@@ -120,7 +120,8 @@
  
--const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
--
- Cu.import("resource://services-sync/log4moz.js");
- Cu.import("resource://services-sync/util.js");
- Cu.import("resource://services-sync/identity.js");
-@@ -51,7 +49,7 @@
+         // Convert apps from remote to local format
+         var apps = [];
+-        for each (var app in tmp) {
++        for (var i = 0; i < tmp.length; i++) {
++          var app = tmp[i];
+           apps.push(self._makeLocalApp(app));
+         }
  
- /**
-  * Single use HTTP requests to RESTish resources.
-- * 
-+ *
-  * @param uri
-  *        URI for the request. This can be an nsIURI object or a string
-  *        that can be used to create one. An exception will be thrown if
-@@ -124,12 +122,6 @@
+@@ -128,7 +129,7 @@
+         cb(null, apps);
  
-   _logName: "Sync.RESTRequest",
- 
--  QueryInterface: XPCOMUtils.generateQI([
--    Ci.nsIBadCertListener2,
--    Ci.nsIInterfaceRequestor,
--    Ci.nsIChannelEventSink
--  ]),
--
-   /*** Public API: ***/
- 
-   /**
-@@ -148,11 +140,6 @@
-   response: null,
- 
-   /**
--   * nsIRequest load flags. Don't do any caching by default.
--   */
--  loadFlags: Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING,
--
--  /**
-    * nsIHttpChannel
+         // Don't update lastModified until we know cb succeeded.
+-        self._appsLastModified = parseInt(req.response.headers['x-timestamp']);
++        self._appsLastModified = parseInt(req.response.headers['x-timestamp'], 10);
+       } catch (e) {
+         self._log.error("Exception in getApps " + e);
+       }
+@@ -141,7 +142,8 @@
+    * don't store them on the server.
     */
-   channel: null,
-@@ -181,7 +168,7 @@
-   /**
-    * Called when the request has been completed, including failures and
-    * timeouts.
--   * 
-+   *
-    * @param error
-    *        Error that occurred while making the request, null if there
-    *        was no error.
-@@ -298,13 +285,12 @@
-       this.onProgress = onProgress;
-     }
- 
--    // Create and initialize HTTP channel.
--    var channel = Services.io.newChannelFromURI(this.uri, null, null)
--                          .QueryInterface(Ci.nsIRequest)
--                          .QueryInterface(Ci.nsIHttpChannel);
--    this.channel = channel;
--    channel.loadFlags |= this.loadFlags;
--    channel.notificationCallbacks = this;
-+    var req = new XMLHttpRequest();
-+    req.open(method, this.uri);
-+    this.xmlhttprequest = req;
-+    req.onreadystatechange = function () {
-+      this.onreadystatechange();
-+    };
- 
-     // Set request headers.
-     var headers = this._headers;
-@@ -314,7 +300,7 @@
-       } else {
-         this._log.trace("HTTP Header " + key + ": " + headers[key]);
+   _makeRemoteApp: function _makeRemoteApp(app) {
+-    for each (var key in this.requiredLocalKeys) {
++    for (var i = 0; i < this.requiredLocalKeys.length; i++) {
++      var key = this.requiredLocalKeys[i];
+       if (!app[key]) {
+         throw new Error("Local app missing key " + key);
        }
--      channel.setRequestHeader(key, headers[key], false);
-+      req.setRequestHeader(key, headers[key], false);
-     }
- 
-     // Set HTTP request body.
-@@ -329,20 +315,13 @@
-         this._log.trace(method + " Body: " + data);
+@@ -167,7 +169,8 @@
+    * registry expects. (Inverse of _makeRemoteApp)
+    */
+   _makeLocalApp: function _makeLocalApp(app) {
+-    for each (var key in this._requiredRemoteKeys) {
++    for (var i = 0; i < this._requiredRemoteKeys; i++) {
++      var key = this._requiredRemoteKeys[i];
+       if (!app[key]) {
+         throw new Error("Remote app missing key " + key);
        }
- 
--      var stream = Cc["@mozilla.org/io/string-input-stream;1"]
--                     .createInstance(Ci.nsIStringInputStream);
--      stream.setData(data, data.length);
--
-       var type = headers["content-type"] || "text/plain";
--      channel.QueryInterface(Ci.nsIUploadChannel);
--      channel.setUploadStream(stream, type, data.length);
-+    } else {
-+      data = null;
-     }
--    // We must set this after setting the upload stream, otherwise it
--    // will always be 'PUT'. Yeah, I know.
--    channel.requestMethod = method;
- 
-     // Blast off!
--    channel.asyncOpen(this, null);
-+    req.send(data);
-     this.status = this.SENT;
-     this.delayTimeout();
-     return this;
-@@ -367,7 +346,7 @@
-                                      Cr.NS_ERROR_NET_TIMEOUT);
-     if (!this.onComplete) {
-       this._log.error("Unexpected error: onComplete not defined in " +
--                      "abortTimeout.")
-+                      "abortTimeout.");
-       return;
-     }
-     this.onComplete(error);
-@@ -375,40 +354,35 @@
- 
-   /*** nsIStreamListener ***/
- 
--  onStartRequest: function onStartRequest(channel) {
--    if (this.status == this.ABORTED) {
--      this._log.trace("Not proceeding with onStartRequest, request was aborted.");
-+  onreadystatechange: function onreadystatechange() {
-+    var req = this.xmlhttprequest;
-+    if (req.readyState == 1) {
-+      // .send() has not yet been called
-       return;
-     }
--
--    try {
--      channel.QueryInterface(Ci.nsIHttpChannel);
--    } catch (ex) {
--      this._log.error("Unexpected error: channel is not a nsIHttpChannel!");
--      this.status = this.ABORTED;
--      channel.cancel(Cr.NS_BINDING_ABORTED);
-+    if (req.readyState == 2) {
-+      // headers have been received
-+      if (this.status == this.ABORTED) {
-+        this._log.trace("Not proceeding with onreadystatechange, request was aborted.");
-+        return;
-+      }
-+      this.status = this.IN_PROGRESS;
-+      var response = this.response = new RESTResponse();
-+      response.request = this;
-+      response.body = "";
-+      this.delayTimeout();
-+      return;
-+    }
-+    if (req.readyState == 3) {
-+      // Some content has been received in .responseText, but not complete content
-+      this.response.body = req.responseText;
-+      this.callOnProgress();
-       return;
+@@ -271,8 +274,8 @@
      }
  
--    this.status = this.IN_PROGRESS;
--
--    this._log.trace("onStartRequest: " + channel.requestMethod + " " +
--                    channel.URI.spec);
--
--    // Create a response object and fill it with some data.
--    var response = this.response = new RESTResponse();
--    response.request = this;
--    response.body = "";
--
--    // Define this here so that we don't have make a new one each time
--    // onDataAvailable() gets called.
--    this._inputStream = Cc["@mozilla.org/scriptableinputstream;1"]
--                          .createInstance(Ci.nsIScriptableInputStream);
-+    // Otherwise the request completed
-+    this.response.body = req.responseText;
+     var time = new Date().getTime();
+-    var lastReq = parseInt(PREFS.get("lastReq", 0));
+-    var backoff = parseInt(PREFS.get("backoff", 0));
++    var lastReq = parseInt(PREFS.get("lastReq", 0), 10);
++    var backoff = parseInt(PREFS.get("backoff", 0), 10);
  
--    this.delayTimeout();
+     if (lastReq + (backoff * 1000) < time) {
+       this._log.warn("X-Backoff is " + backoff + ", not making request");
+@@ -300,5 +303,5 @@
+       this._backoff = true;
+       PREFS.set("backoff", backoff + "");
+     }
 -  },
--
--  onStopRequest: function onStopRequest(channel, context, statusCode) {
-     if (this.timeoutTimer) {
-       // Clear the abort timer now that the channel is done.
-       this.timeoutTimer.clear();
-@@ -416,24 +390,13 @@
- 
-     // We don't want to do anything for a request that's already been aborted.
-     if (this.status == this.ABORTED) {
--      this._log.trace("Not proceeding with onStopRequest, request was aborted.");
-+      this._log.trace("Not proceeding with onreadystatechange, request was aborted.");
-       return;
-     }
- 
--    try {
--      channel.QueryInterface(Ci.nsIHttpChannel);
--    } catch (ex) {
--      this._log.error("Unexpected error: channel not nsIHttpChannel!");
--      this.status = this.ABORTED;
--      return;
--    }
-     this.status = this.COMPLETED;
- 
--    var statusSuccess = Components.isSuccessCode(statusCode);
--    var uri = channel && channel.URI && channel.URI.spec || "<unknown>";
--    this._log.trace("Channel for " + channel.requestMethod + " " + uri +
--                    " returned status code " + statusCode);
--
-+    var statusSuccess = req.status >= 200 && req.status < 400;
-     if (!this.onComplete) {
-       this._log.error("Unexpected error: onComplete not defined in " +
-                       "abortRequest.");
-@@ -452,30 +415,18 @@
-       return;
-     }
- 
--    this._log.debug(this.method + " " + uri + " " + this.response.status);
-+    this._log.debug(this.method + " " + this.uri + " " + this.response.status);
- 
-     // Additionally give the full response body when Trace logging.
-     if (this._log.level <= Log4Moz.Level.Trace) {
-       this._log.trace(this.method + " body: " + this.response.body);
-     }
- 
--    delete this._inputStream;
--
-     this.onComplete(null);
-     this.onComplete = this.onProgress = null;
-   },
- 
--  onDataAvailable: function onDataAvailable(req, cb, stream, off, count) {
--    this._inputStream.init(stream);
--    try {
--      this.response.body += this._inputStream.read(count);
--    } catch (ex) {
--      this._log.warn("Exception thrown reading " + count +
--                     " bytes from the channel.");
--      this._log.debug(Utils.exceptionStr(ex));
--      throw ex;
--    }
--
-+  onDataAvailable: function callOnProgress() {
-     try {
-       this.onProgress();
-     } catch (ex) {
-@@ -499,21 +450,7 @@
-     this.delayTimeout();
-   },
- 
--  /*** nsIInterfaceRequestor ***/
--
--  getInterface: function(aIID) {
--    return this.QueryInterface(aIID);
--  },
--
--  /*** nsIBadCertListener2 ***/
--
--  notifyCertProblem: function notifyCertProblem(socketInfo, sslStatus, targetHost) {
--    this._log.warn("Invalid HTTPS certificate encountered!");
--    // Suppress invalid HTTPS certificate warnings in the UI.
--    // (The request will still fail.)
--    return true;
--  },
--
-+  // FIXME: I don't think we can detect redirects with XMLHttpRequest
-   /*** nsIChannelEventSink ***/
-   asyncOnChannelRedirect:
-     function asyncOnChannelRedirect(oldChannel, newChannel, flags, callback) {
-@@ -558,8 +495,8 @@
-   get status() {
-     var status;
-     try {
--      var channel = this.request.channel.QueryInterface(Ci.nsIHttpChannel);
--      status = channel.responseStatus;
-+      var req = this.request.xmlhttprequest;
-+      status = req.status;
-     } catch (ex) {
-       this._log.debug("Caught exception fetching HTTP status code:" +
-                       Utils.exceptionStr(ex));
-@@ -575,8 +512,8 @@
-   get success() {
-     var success;
-     try {
--      var channel = this.request.channel.QueryInterface(Ci.nsIHttpChannel);
--      success = channel.requestSucceeded;
-+      var req = this.request.xmlhttprequest;
-+      success = req.status >= 200 && req.status < 400;
-     } catch (ex) {
-       this._log.debug("Caught exception fetching HTTP success flag:" +
-                       Utils.exceptionStr(ex));
-@@ -593,10 +530,16 @@
-     var headers = {};
-     try {
-       this._log.trace("Processing response headers.");
--      var channel = this.request.channel.QueryInterface(Ci.nsIHttpChannel);
--      channel.visitResponseHeaders(function (header, value) {
--        headers[header.toLowerCase()] = value;
--      });
-+      var req = this.request.xmlhttprequest;
-+      var headerText = req.getAllResponseHeaders();
-+      var match = true;
-+      while (match) {
-+        match = /^\s*([a-zA-Z0-9-]+):.*/.exec(headerText);
-+        if (match) {
-+          headers[match[1].toLowerCase()] = req.getResponseHeader(match[1]);
-+          headerText = headerText.substr(match.index + match[0].length);
++  }
+ };
+\ No newline at end of file
+diff --recursive -w -u orig-modules/aitc/modules/manager.js modules/aitc/modules/manager.js
+--- orig-modules/aitc/modules/manager.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/aitc/modules/manager.js	2012-05-02 17:54:47.000000000 -0500
+@@ -164,7 +164,7 @@
+       {
+         notify: function _getTimerNotify() {
+           self._checkServer();
+-        },
 +        }
-+      }
-     } catch (ex) {
-       this._log.debug("Caught exception processing response headers:" +
-                       Utils.exceptionStr(ex));
-@@ -613,90 +556,3 @@
-   body: null
+       }, getFreq, Ci.nsITimer.TYPE_REPEATING_SLACK
+     );
+     this._log.info("GET timer set, next attempt in " + getFreq + "ms");
+@@ -429,6 +429,6 @@
+     BrowserID.getAssertion(gotSilentAssertion, {
+       audience: this.DASHBOARD, sameEmailAs: this.MARKETPLACE
+     });
+-  },
++  }
  
  };
--
--
--/**
-- * RESTRequest variant for use against a Sync storage server.
-- */
--function SyncStorageRequest(uri) {
--  RESTRequest.call(this, uri);
--}
--SyncStorageRequest.prototype = {
--
--  __proto__: RESTRequest.prototype,
--
--  _logName: "Sync.StorageRequest",
--
--  /**
--   * The string to use as the base User-Agent in Sync requests.
--   * These strings will look something like
--   * 
--   *   Firefox/4.0 FxSync/1.8.0.20100101.mobile
--   * 
--   * or
--   * 
--   *   Firefox Aurora/5.0a1 FxSync/1.9.0.20110409.desktop
--   */
--  userAgent:
--    Services.appinfo.name + "/" + Services.appinfo.version +  // Product.
--    " FxSync/" + WEAVE_VERSION + "." +                        // Sync.
--    Services.appinfo.appBuildID + ".",                        // Build.
--
--  /**
--   * Wait 5 minutes before killing a request.
--   */
--  timeout: STORAGE_REQUEST_TIMEOUT,
--
--  dispatch: function dispatch(method, data, onComplete, onProgress) {
--    // Compose a UA string fragment from the various available identifiers.
--    if (Svc.Prefs.get("sendVersionInfo", true)) {
--      var ua = this.userAgent + Svc.Prefs.get("client.type", "desktop");
--      this.setHeader("user-agent", ua);
--    }
--
--    var authenticator = Identity.getRESTRequestAuthenticator();
--    if (authenticator) {
--      authenticator(this);
--    } else {
--      this._log.debug("No authenticator found.");
--    }
--
--    return RESTRequest.prototype.dispatch.apply(this, arguments);
+diff --recursive -w -u orig-modules/aitc/modules/storage.js modules/aitc/modules/storage.js
+--- orig-modules/aitc/modules/storage.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/aitc/modules/storage.js	2012-05-02 17:54:27.000000000 -0500
+@@ -193,7 +193,7 @@
+       this._writeLock = false;
+       cb(msg);
+     }
 -  },
--
--  onStartRequest: function onStartRequest(channel) {
--    RESTRequest.prototype.onStartRequest.call(this, channel);
--    if (this.status == this.ABORTED) {
--      return;
--    }
--
--    this.processHeaders(this.response.success, this.response.headers);
++  }
+ };
+ 
+ /**
+@@ -244,7 +244,8 @@
+     var localApps = {};
+     
+     // Convert lApps to a dictionary of origin -> app (instead of id -> app).
+-    for (var [id, app] in Iterator(localApps)) {
++    for (var id in localApps) {
++      var app = localApps[id];
+       app.id = id;
+       toDelete[app.origin] = app;
+       localApps[app.origin] = app;
+@@ -252,7 +253,8 @@
+ 
+     // Iterate over remote apps, and find out what changes we must apply.
+     var toInstall = [];
+-    for each (var app in remoteApps) {
++    for (var i = 0; i < remoteApps.length; i++) {
++      var app = remoteApps[i];
+       // Don't delete apps that are both local & remote.
+       var origin = app.origin;
+       delete toDelete[origin];
+@@ -381,7 +383,7 @@
+ 
+       callback(err, manifest);
+     });
 -  },
--
--  /**
--   * Process response headers and perform side-effects.
--   *
--   * @param success
--   *        Boolean indicating whether response was successful
--   * @param headers
--   *        Object containing HTTP headers.
--   */
--  processHeaders: function processHeaders(success, headers) {
--    // Save the latest server timestamp when possible.
--    if (headers["x-timestamp"]) {
--      SyncStorageRequest.serverTime = parseFloat(headers["x-timestamp"]);
--    }
--
--    // This is a server-side safety valve to allow slowing down
--    // clients without hurting performance.
--    if (headers["x-backoff"]) {
--      Svc.Obs.notify("weave:service:backoff:interval",
--                     parseInt(headers["x-backoff"], 10));
--    }
--
--    if (success && headers["x-quota-remaining"]) {
--      Svc.Obs.notify("weave:service:quota:remaining",
--                     parseInt(headers["x-quota-remaining"], 10));
--    }
--  }
--};
-diff -u orig-modules/util.js modules/util.js
---- orig-modules/util.js	2012-03-27 00:23:26.000000000 -0500
-+++ modules/util.js	2012-03-26 18:25:32.000000000 -0500
-@@ -38,22 +38,12 @@
- const EXPORTED_SYMBOLS = ["XPCOMUtils", "Services", "NetUtil", "PlacesUtils",
-                           "FileUtils", "Utils", "Async", "Svc", "Str"];
++  }
  
--const Cc = Components.classes;
--const Ci = Components.interfaces;
--const Cr = Components.results;
--const Cu = Components.utils;
--
- Cu.import("resource://services-sync/async.js");
- Cu.import("resource://services-sync/constants.js");
- Cu.import("resource://services-sync/ext/Observers.js");
- Cu.import("resource://services-sync/ext/Preferences.js");
- Cu.import("resource://services-sync/ext/StringBundle.js");
- Cu.import("resource://services-sync/log4moz.js");
--Cu.import("resource://gre/modules/XPCOMUtils.jsm");
--Cu.import("resource://gre/modules/Services.jsm");
--Cu.import("resource://gre/modules/PlacesUtils.jsm");
--Cu.import("resource://gre/modules/NetUtil.jsm");
--Cu.import("resource://gre/modules/FileUtils.jsm");
+ };
  
- /*
-  * Utility functions
-@@ -65,7 +55,7 @@
-    *
-    * @usage MyObj._catch = Utils.catch;
-    *        MyObj.foo = function() { this._catch(func)(); }
--   *        
-+   *
-    * Optionally pass a function which will be called if an
-    * exception occurs.
+diff --recursive -w -u orig-modules/common/log4moz.js modules/common/log4moz.js
+--- orig-modules/common/log4moz.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/common/log4moz.js	2012-05-02 17:53:11.000000000 -0500
+@@ -185,7 +185,7 @@
+ 
+   _level: null,
+   get level() {
+-    if (this._level != null)
++    if (this._level !== null)
+       return this._level;
+     if (this.parent)
+       return this.parent.level;
+@@ -197,7 +197,7 @@
+   },
+ 
+   _parent: null,
+-  get parent() this._parent,
++  get parent() {return this._parent;},
+   set parent(parent) {
+     if (this._parent == parent) {
+       return;
+@@ -335,7 +335,7 @@
+ 
+     // trigger updates for any possible descendants of this logger
+     for (var logger in this._loggers) {
+-      if (logger != name && logger.indexOf(name) == 0)
++      if (logger != name && logger.indexOf(name) === 0)
+         this._updateParents(logger);
+     }
+   },
+diff --recursive -w -u orig-modules/common/observers.js modules/common/observers.js
+--- orig-modules/common/observers.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/common/observers.js	2012-05-02 17:52:33.000000000 -0500
+@@ -91,9 +91,9 @@
+     // we can make it.  We could index by topic, but we can't index by callback
+     // or thisObject, as far as I know, since the keys to JavaScript hashes
+     // (a.k.a. objects) can apparently only be primitive values.
+-    var [observer] = this._cache.filter(function(v) v.topic      == topic    &&
++    var observer = this._cache.filter(function(v) {return v.topic      == topic    &&
+                                                     v.callback   == callback &&
+-                                                    v.thisObject == thisObject);
++                                                    v.thisObject == thisObject;})[0];
+     if (observer) {
+       this._service.removeObserver(observer, topic);
+       this._cache.splice(this._cache.indexOf(observer), 1);
+diff --recursive -w -u orig-modules/common/preferences.js modules/common/preferences.js
+--- orig-modules/common/preferences.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/common/preferences.js	2012-05-02 17:52:00.000000000 -0500
+@@ -78,7 +78,7 @@
     */
-@@ -106,7 +96,7 @@
-       }
-     };
+   get: function(prefName, defaultValue) {
+     if (Array.isArray(prefName))
+-      return prefName.map(function(v) this.get(v, defaultValue), this);
++      return prefName.map(function(v) {return this.get(v, defaultValue);}, this);
+ 
+     if (this._site)
+       return this._siteGet(prefName, defaultValue);
+@@ -137,8 +137,8 @@
+    */
+   set: function(prefName, prefValue) {
+     if (isObject(prefName)) {
+-      for (var [name, value] in Iterator(prefName))
+-        this.set(name, value);
++      for (var name in prefName)
++        this.set(name, prefName[name]);
+       return;
+     }
+ 
+@@ -150,7 +150,7 @@
+ 
+   _set: function(prefName, prefValue) {
+     var prefType;
+-    if (typeof prefValue != "undefined" && prefValue != null)
++    if (typeof prefValue != "undefined" && prefValue !== null)
+       prefType = prefValue.constructor.name;
+ 
+     switch (prefType) {
+@@ -174,7 +174,7 @@
+                 "32-bit integer range -(2^31-1) to 2^31-1.  To store numbers " +
+                 "outside that range, store them as strings.");
+         this._prefSvc.setIntPref(prefName, prefValue);
+-        if (prefValue % 1 != 0)
++        if (prefValue % 1 !== 0)
+           Cu.reportError("Warning: setting the " + prefName + " pref to the " +
+                          "non-integer number " + prefValue + " converted it " +
+                          "to the integer number " + this.get(prefName) +
+@@ -258,7 +258,7 @@
+ 
+   reset: function(prefName) {
+     if (Array.isArray(prefName)) {
+-      prefName.map(function(v) this.reset(v), this);
++      prefName.map(function(v) {return this.reset(v);}, this);
+       return;
+     }
+ 
+@@ -390,9 +390,9 @@
+     // make it.  We could index by fullBranch, but we can't index by callback
+     // or thisObject, as far as I know, since the keys to JavaScript hashes
+     // (a.k.a. objects) can apparently only be primitive values.
+-    var [observer] = observers.filter(function(v) v.prefName   == fullPrefName &&
++    var observer = observers.filter(function(v) {return v.prefName   == fullPrefName &&
+                                                   v.callback   == callback &&
+-                                                  v.thisObject == thisObject);
++                                                  v.thisObject == thisObject;})[0];
+ 
+     if (observer) {
+       Preferences._prefSvc.removeObserver(fullPrefName, observer);
+@@ -439,7 +439,7 @@
+       prefSvc = prefSvc.getBranch(this._prefBranch);
+     }
+ 
+-    this.__defineGetter__("_prefSvc", function() prefSvc);
++    this.__defineGetter__("_prefSvc", function() {return prefSvc;});
+     return this._prefSvc;
    },
--  
-+
-   isLockException: function isLockException(ex) {
-     return ex && ex.indexOf && ex.indexOf("Could not acquire lock.") == 0;
+ 
+@@ -450,7 +450,7 @@
+   get _ioSvc() {
+     var ioSvc = Cc["@mozilla.org/network/io-service;1"].
+                 getService(Ci.nsIIOService);
+-    this.__defineGetter__("_ioSvc", function() ioSvc);
++    this.__defineGetter__("_ioSvc", function() {return ioSvc;});
+     return this._ioSvc;
    },
-@@ -114,14 +104,14 @@
-   /**
-    * Wrap functions to notify when it starts and finishes executing or if it
-    * threw an error.
--   * 
-+   *
-    * The message is a combination of a provided prefix, the local name, and
-    * the event. Possible events are: "start", "finish", "error". The subject
-    * is the function's return value on "finish" or the caught exception on
-    * "error". The data argument is the predefined data value.
--   * 
-+   *
-    * Example:
--   * 
-+   *
-    * @usage function MyObj(name) {
-    *          this.name = name;
-    *          this._notify = Utils.notify("obj:");
-@@ -173,7 +163,11 @@
+ 
+@@ -461,7 +461,7 @@
+   get _contentPrefSvc() {
+     var contentPrefSvc = Cc["@mozilla.org/content-pref/service;1"].
+                          getService(Ci.nsIContentPrefService);
+-    this.__defineGetter__("_contentPrefSvc", function() contentPrefSvc);
++    this.__defineGetter__("_contentPrefSvc", function() {return contentPrefSvc;});
+     return this._contentPrefSvc;
+   }
+ 
+@@ -498,7 +498,7 @@
+     // The pref service only observes whole branches, but we only observe
+     // individual preferences, so we check here that the pref that changed
+     // is the exact one we're observing (and not some sub-pref on the branch).
+-    if (data.indexOf(this.prefName) != 0)
++    if (data.indexOf(this.prefName) !== 0)
+       return;
+ 
+     if (typeof this.callback == "function") {
+@@ -518,6 +518,6 @@
+   // We can't check for |val.constructor == Object| here, since the value
+   // might be from a different context whose Object constructor is not the same
+   // as ours, so instead we match based on the name of the constructor.
+-  return (typeof val != "undefined" && val != null && typeof val == "object" &&
++  return (typeof val != "undefined" && val !== null && typeof val == "object" &&
+           val.constructor.name == "Object");
+ }
+diff --recursive -w -u orig-modules/common/rest.js modules/common/rest.js
+--- orig-modules/common/rest.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/common/rest.js	2012-05-02 17:47:56.000000000 -0500
+@@ -231,7 +231,7 @@
+    *
+    * @return the request object.
+    */
+-  delete: function delete_(onComplete, onProgress) {
++  "delete": function delete_(onComplete, onProgress) {
+     return this.dispatch("DELETE", null, onComplete, onProgress);
+   },
+ 
+@@ -615,5 +615,5 @@
+     return RESTRequest.prototype.dispatch.call(
+       this, method, data, onComplete, onProgress
+     );
+-  },
++  }
+ };
+diff --recursive -w -u orig-modules/common/utils.js modules/common/utils.js
+--- orig-modules/common/utils.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/common/utils.js	2012-05-02 17:45:42.000000000 -0500
+@@ -149,7 +149,11 @@
    },
  
    byteArrayToString: function byteArrayToString(bytes) {
 -    return [String.fromCharCode(byte) for each (byte in bytes)].join("");
-+    var result = "";
-+    for (var i=0; i<bytes.length; i++) {
-+      result += String.fromCharCode(bytes[i]);
++    var result = [];
++    for (var i = 0; i < bytes.length; i++) {
++      result.push(String.fromCharCode(bytes[i]));
 +    }
-+    return result;
++    return result.join("");
    },
  
-   /**
-@@ -206,18 +200,23 @@
-     return !!guid && this._base64url_regex.test(guid);
-   },
- 
--  ensureOneOpen: var (windows = {}) function ensureOneOpen(window) {
-+  windows: {},
-+
-+  ensureOneOpen: function ensureOneOpen(window) {
-     // Close the other window if it exists
-     var url = window.location.href;
--    var other = windows[url];
-+    var other = this.windows[url];
-     if (other != null)
-       other.close();
- 
-     // Save the new window for future closure
--    windows[url] = window;
-+    this.windows[url] = window;
- 
-     // Actively clean up when the window is closed
--    window.addEventListener("unload", function() windows[url] = null, false);
-+    var self = this;
-+    window.addEventListener("unload", function() {
-+      return self.windows[url] = null;
-+    }, false);
-   },
- 
-   // Returns a nsILocalFile representing a file relative to the current
-@@ -241,7 +240,7 @@
-    */
-   deferGetSet: function Utils_deferGetSet(obj, defer, prop) {
-     if (Array.isArray(prop))
--      return prop.map(function(prop) Utils.deferGetSet(obj, defer, prop));
-+      return prop.map(function(prop) {return Utils.deferGetSet(obj, defer, prop);});
- 
-     var prot = obj.prototype;
- 
-@@ -262,7 +261,7 @@
- 
-   lazyStrings: function Weave_lazyStrings(name) {
-     var bundle = "chrome://weave/locale/services/" + name + ".properties";
--    return function() new StringBundle(bundle);
-+    return function() {return new StringBundle(bundle);};
-   },
- 
-   deepEquals: function eq(a, b) {
-@@ -303,10 +302,13 @@
- 
-     } else {
-       ret = {};
--      var props = [p for (p in thing)];
-+      var props = [];
-+      for (i=0; i<thing.length; i++) {
-+        props.push(thing[i]);
+   bytesAsHex: function bytesAsHex(bytes) {
+@@ -179,7 +183,10 @@
+     // is turned into 8 characters from the 32 character base.
+     var ret = "";
+     for (var i = 0; i < bytes.length; i += 5) {
+-      var c = [byte.charCodeAt() for each (byte in bytes.slice(i, i + 5))];
++      var c = [];
++      for (var j = i; j < i + 5; j++) {
++        c.push(bytes.charCodeAt(i));
 +      }
-       if (!noSort)
-         props = props.sort();
--      props.forEach(function(k) ret[k] = Utils.deepCopy(thing[k], noSort));
-+      props.forEach(function(k) {ret[k] = Utils.deepCopy(thing[k], noSort);});
-     }
+       ret += key[c[0] >> 3]
+            + key[((c[0] << 2) & 0x1f) | (c[1] >> 6)]
+            + key[(c[1] >> 1) & 0x1f]
+@@ -229,7 +236,7 @@
  
-     return ret;
-@@ -358,19 +360,19 @@
- 
-     return "No traceback available";
-   },
--  
-+
-   // Generator and discriminator for HMAC exceptions.
--  // Split these out in case we want to make them richer in future, and to 
-+  // Split these out in case we want to make them richer in future, and to
-   // avoid inevitable confusion if the message changes.
-   throwHMACMismatch: function throwHMACMismatch(shouldBe, is) {
-     throw "Record SHA256 HMAC mismatch: should be " + shouldBe + ", is " + is;
-   },
--  
-+
-   isHMACMismatch: function isHMACMismatch(ex) {
-     const hmacFail = "Record SHA256 HMAC mismatch: ";
-     return ex && ex.indexOf && (ex.indexOf(hmacFail) == 0);
-   },
--  
-+
-   /**
-    * UTF8-encode a message and hash it with the given hasher. Returns a
-    * string containing bytes. The hasher is reset if it's an HMAC hasher.
-@@ -392,7 +394,10 @@
-    */
-   digestBytes: function digestBytes(message, hasher) {
-     // No UTF-8 encoding for you, sunshine.
--    var bytes = [b.charCodeAt() for each (b in message)];
-+    var bytes = [];
-+    for (var i=0; i<message.length; i++) {
-+      bytes.push(message.charCodeAt(i));
-+    }
-     hasher.update(bytes, bytes.length);
-     var result = hasher.finish(false);
-     if (hasher instanceof Ci.nsICryptoHMAC) {
-@@ -423,14 +428,14 @@
-   sha1Base32: function sha1Base32(message) {
-     return Utils.encodeBase32(Utils._sha1(message));
-   },
--  
-+
-   /**
-    * Produce an HMAC key object from a key string.
-    */
-   makeHMACKey: function makeHMACKey(str) {
-     return Svc.KeyFactory.keyFromString(Ci.nsIKeyObject.HMAC, str);
-   },
--    
-+
-   /**
-    * Produce an HMAC hasher and initialize it with the given HMAC key.
-    */
-@@ -460,16 +465,16 @@
- 
-   /**
-    * PBKDF2 implementation in Javascript.
--   * 
--   * The arguments to this function correspond to items in 
--   * PKCS #5, v2.0 pp. 9-10 
--   * 
-+   *
-+   * The arguments to this function correspond to items in
-+   * PKCS #5, v2.0 pp. 9-10
-+   *
-    * P: the passphrase, an octet string:              e.g., "secret phrase"
-    * S: the salt, an octet string:                    e.g., "DNXPzPpiwn"
-    * c: the number of iterations, a positive integer: e.g., 4096
--   * dkLen: the length in octets of the destination 
-+   * dkLen: the length in octets of the destination
-    *        key, a positive integer:                  e.g., 16
--   *        
-+   *
-    * The output is an octet string of length dkLen, which you
-    * can encode as you wish.
-    */
-@@ -478,12 +483,12 @@
-     // Use the constant.
-     if (!dkLen)
-       dkLen = SYNC_KEY_DECODED_LENGTH;
--    
-+
-     /* For HMAC-SHA-1 */
-     const HLEN = 20;
--    
-+
-     function F(S, c, i, h) {
--    
-+
-       function XOR(a, b, isA) {
-         if (a.length != b.length) {
-           return false;
-@@ -500,7 +505,7 @@
- 
-         return val;
-       }
--    
-+
-       var ret;
-       var U = [];
- 
-@@ -523,13 +528,13 @@
- 
-       return ret;
-     }
--    
-+
-     var l = Math.ceil(dkLen / HLEN);
-     var r = dkLen - ((l - 1) * HLEN);
- 
-     // Reuse the key and the hasher. Remaking them 4096 times is 'spensive.
-     var h = Utils.makeHMACHasher(Ci.nsICryptoHMAC.SHA1, Utils.makeHMACKey(P));
--    
-+
-     T = [];
-     for (var i = 0; i < l;) {
-       T[i] = F(S, c, ++i, h);
-@@ -578,8 +583,9 @@
+       function advance() {
+         c  = str[cOffset++];
+-        if (!c || c == "" || c == "=") // Easier than range checking.
++        if (!c || c === "" || c == "=") // Easier than range checking.
+           throw "Done";                // Will be caught far away.
+         val = key.indexOf(c);
+         if (val == -1)
+@@ -237,8 +244,9 @@
        }
  
        // Handle a left shift, restricted to bytes.
@@ -693,95 +339,59 @@ diff -u orig-modules/util.js modules/util.js
  
        advance();
        accumulate(left(val, 3));
-@@ -650,7 +656,10 @@
-     // is turned into 8 characters from the 32 character base.
-     var ret = "";
-     for (var i = 0; i < bytes.length; i += 5) {
--      var c = [byte.charCodeAt() for each (byte in bytes.slice(i, i + 5))];
-+      var c = [];
-+      for (var j=i; j<i+5; j++) {
-+        c.push(bytes.charCodeAt(j);
-+      }
-       ret += key[c[0] >> 3]
-            + key[((c[0] << 2) & 0x1f) | (c[1] >> 6)]
-            + key[(c[1] >> 1) & 0x1f]
-@@ -964,14 +973,14 @@
-     var is = this._utf8Converter.convertToInputStream(out);
-     NetUtil.asyncCopy(is, fos, function (result) {
-       if (typeof callback == "function") {
--        callback.call(that);        
-+        callback.call(that);
-       }
-     });
-   },
- 
-   /**
-    * Execute a function on the next event loop tick.
--   * 
-+   *
-    * @param callback
-    *        Function to invoke.
-    * @param thisObj [optional]
-@@ -1149,7 +1158,7 @@
- 
-     // 20-char sync key.
-     if (pp.length == 23 &&
--        [5, 11, 17].every(function(i) pp[i] == '-')) {
-+        [5, 11, 17].every(function(i) {return pp[i] == '-';})) {
- 
-       return pp.slice(0, 5) + pp.slice(6, 11)
-              + pp.slice(12, 17) + pp.slice(18, 23);
-@@ -1157,7 +1166,7 @@
- 
-     // "Modern" 26-char key.
-     if (pp.length == 31 &&
--        [1, 7, 13, 19, 25].every(function(i) pp[i] == '-')) {
-+        [1, 7, 13, 19, 25].every(function(i) {return pp[i] == '-';})) {
- 
-       return pp.slice(0, 1) + pp.slice(2, 7)
-              + pp.slice(8, 13) + pp.slice(14, 19)
-@@ -1167,7 +1176,7 @@
-     // Something else -- just return.
-     return pp;
-   },
--  
-+
-   normalizeAccount: function normalizeAccount(acc) {
-     return acc.trim();
-   },
-@@ -1188,7 +1197,7 @@
-   arraySub: function arraySub(minuend, subtrahend) {
-     if (!minuend.length || !subtrahend.length)
-       return minuend;
--    return minuend.filter(function(i) subtrahend.indexOf(i) == -1);
-+    return minuend.filter(function(i) {return subtrahend.indexOf(i) == -1;});
-   },
- 
-   /**
-@@ -1219,7 +1228,7 @@
- 
-     if (status == slots.SLOT_NOT_LOGGED_IN)
-       return true;
--    
-+
-     // something wacky happened, pretend MP is locked
-     return true;
-   },
-@@ -1238,7 +1247,7 @@
-     } catch(e) {}
-     return false;
-   },
--  
-+
-   /**
-    * Return a value for a backoff interval.  Maximum is eight hours, unless
-    * Status.backoffInterval is higher.
-@@ -1283,7 +1292,7 @@
-     if (value < 10000000000) {
-       throw new Error("Timestamp appears to be in seconds: " + value);
-     }
+@@ -299,7 +307,7 @@
+     var len = b64.length;
+     var over = len % 4;
+     return over ? atob(b64.substr(0, len - over)) : atob(b64);
 -  },
 +  }
  };
  
- XPCOMUtils.defineLazyGetter(Utils, "_utf8Converter", function() {
+ XPCOMUtils.defineLazyGetter(CommonUtils, "_utf8Converter", function() {
+diff --recursive -w -u orig-modules/crypto/modules/utils.js modules/crypto/modules/utils.js
+--- orig-modules/crypto/modules/utils.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/crypto/modules/utils.js	2012-05-02 17:43:07.000000000 -0500
+@@ -42,7 +42,10 @@
+    */
+   digestBytes: function digestBytes(message, hasher) {
+     // No UTF-8 encoding for you, sunshine.
+-    var bytes = [b.charCodeAt() for each (b in message)];
++    var bytes = [];
++    for (var i = 0; i < message.length; i++) {
++      bytes.push(message.charCodeAt(i));
++    }
+     hasher.update(bytes, bytes.length);
+     var result = hasher.finish(false);
+     if (hasher instanceof Ci.nsICryptoHMAC) {
+@@ -326,7 +329,7 @@
+     }
+ 
+     return header += ', ext="' + ext +'"';
+-  },
++  }
+ };
+ 
+ XPCOMUtils.defineLazyGetter(CryptoUtils, "_utf8Converter", function() {
+Only in modules/crypto/modules: utils.js.orig
+Only in modules/crypto/modules: utils.js.rej
+diff --recursive -w -u orig-modules/identity/browserid.js modules/identity/browserid.js
+--- orig-modules/identity/browserid.js	2012-05-02 17:57:37.000000000 -0500
++++ modules/identity/browserid.js	2012-05-02 17:42:23.000000000 -0500
+@@ -305,7 +305,7 @@
+         "'email'"             +
+       "));";
+     Cu.evalInSandbox(scriptText, obj.sandbox, "1.8", ID_URI, 1);
+-  },
++  }
+ };
+ 
+ /**
+@@ -390,7 +390,7 @@
+       null, // postData
+       null  // headers
+     );
+-  },
++  }
+ };
+ 
+ XPCOMUtils.defineLazyGetter(this, "BrowserID", function() {

@@ -39,10 +39,7 @@
 
 const EXPORTED_SYMBOLS = ['Log4Moz'];
 
-const Cc = Components.classes;
-const Ci = Components.interfaces;
-const Cr = Components.results;
-const Cu = Components.utils;
+
 
 const ONE_BYTE = 1;
 const ONE_KILOBYTE = 1024 * ONE_BYTE;
@@ -51,8 +48,8 @@ const ONE_MEGABYTE = 1024 * ONE_KILOBYTE;
 const STREAM_SEGMENT_SIZE = 4096;
 const PR_UINT32_MAX = 0xffffffff;
 
-Cu.import("resource://gre/modules/NetUtil.jsm");
-Cu.import("resource://gre/modules/FileUtils.jsm");
+//Cu.import("resource://gre/modules/NetUtil.jsm");
+//Cu.import("resource://gre/modules/FileUtils.jsm");
 
 var Log4Moz = {
   Level: {
@@ -188,7 +185,7 @@ Logger.prototype = {
 
   _level: null,
   get level() {
-    if (this._level != null)
+    if (this._level !== null)
       return this._level;
     if (this.parent)
       return this.parent.level;
@@ -200,7 +197,7 @@ Logger.prototype = {
   },
 
   _parent: null,
-  get parent() this._parent,
+  get parent() {return this._parent;},
   set parent(parent) {
     if (this._parent == parent) {
       return;
@@ -338,7 +335,7 @@ LoggerRepository.prototype = {
 
     // trigger updates for any possible descendants of this logger
     for (var logger in this._loggers) {
-      if (logger != name && logger.indexOf(name) == 0)
+      if (logger != name && logger.indexOf(name) === 0)
         this._updateParents(logger);
     }
   },
@@ -373,7 +370,7 @@ BasicFormatter.prototype = {
   __proto__: Formatter.prototype,
 
   format: function BF_format(message) {
-    return message.time + "\t" + message.loggerName + "\t" + message.levelDesc 
+    return message.time + "\t" + message.loggerName + "\t" + message.levelDesc
            + "\t" + message.message + "\n";
   }
 };
@@ -442,7 +439,7 @@ ConsoleAppender.prototype = {
 
 /**
  * Base implementation for stream based appenders.
- * 
+ *
  * Caution: This writes to the output stream synchronously, thus logging calls
  * block as the data is written to the stream. This can have negligible impact
  * for in-memory streams, but should be taken into account for I/O streams
@@ -460,7 +457,7 @@ BlockingStreamAppender.prototype = {
 
   /**
    * Output stream to write to.
-   * 
+   *
    * This will automatically open the stream if it doesn't exist yet by
    * calling newOutputStream. The resulting raw stream is wrapped in a
    * nsIConverterOutputStream to ensure text is written as UTF-8.
@@ -481,7 +478,7 @@ BlockingStreamAppender.prototype = {
       }
       this._converterStream.init(
         this._outputStream, "UTF-8", STREAM_SEGMENT_SIZE,
-        Ci.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);      
+        Ci.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
     }
     return this._converterStream;
   },
@@ -521,7 +518,7 @@ BlockingStreamAppender.prototype = {
 
 /**
  * Append to an nsIStorageStream
- * 
+ *
  * This writes logging output to an in-memory stream which can later be read
  * back as an nsIInputStream. It can be used to avoid expensive I/O operations
  * during logging. Instead, one can periodically consume the input stream and
@@ -531,7 +528,7 @@ function StorageStreamAppender(formatter) {
   this._name = "StorageStreamAppender";
   BlockingStreamAppender.call(this, formatter);
 }
-StorageStreamAppender.prototype = { 
+StorageStreamAppender.prototype = {
   __proto__: BlockingStreamAppender.prototype,
 
   _ss: null,
@@ -590,7 +587,7 @@ FileAppender.prototype = {
 
 /**
  * Rotating file appender (discouraged)
- * 
+ *
  * Similar to FileAppender, but rotates logs when they become too large.
  */
 function RotatingFileAppender(file, formatter, maxSize, maxBackups) {

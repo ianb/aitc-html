@@ -42,7 +42,7 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+//Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 // The minimum and maximum integers that can be set as preferences.
 // The range of valid values is narrower than the range of valid JS values
@@ -78,7 +78,7 @@ Preferences.prototype = {
    */
   get: function(prefName, defaultValue) {
     if (Array.isArray(prefName))
-      return prefName.map(function(v) this.get(v, defaultValue), this);
+      return prefName.map(function(v) {return this.get(v, defaultValue);}, this);
 
     if (this._site)
       return this._siteGet(prefName, defaultValue);
@@ -137,8 +137,8 @@ Preferences.prototype = {
    */
   set: function(prefName, prefValue) {
     if (isObject(prefName)) {
-      for (var [name, value] in Iterator(prefName))
-        this.set(name, value);
+      for (var name in prefName)
+        this.set(name, prefName[name]);
       return;
     }
 
@@ -150,7 +150,7 @@ Preferences.prototype = {
 
   _set: function(prefName, prefValue) {
     var prefType;
-    if (typeof prefValue != "undefined" && prefValue != null)
+    if (typeof prefValue != "undefined" && prefValue !== null)
       prefType = prefValue.constructor.name;
 
     switch (prefType) {
@@ -174,7 +174,7 @@ Preferences.prototype = {
                 "32-bit integer range -(2^31-1) to 2^31-1.  To store numbers " +
                 "outside that range, store them as strings.");
         this._prefSvc.setIntPref(prefName, prefValue);
-        if (prefValue % 1 != 0)
+        if (prefValue % 1 !== 0)
           Cu.reportError("Warning: setting the " + prefName + " pref to the " +
                          "non-integer number " + prefValue + " converted it " +
                          "to the integer number " + this.get(prefName) +
@@ -258,7 +258,7 @@ Preferences.prototype = {
 
   reset: function(prefName) {
     if (Array.isArray(prefName)) {
-      prefName.map(function(v) this.reset(v), this);
+      prefName.map(function(v) {return this.reset(v);}, this);
       return;
     }
 
@@ -390,9 +390,9 @@ Preferences.prototype = {
     // make it.  We could index by fullBranch, but we can't index by callback
     // or thisObject, as far as I know, since the keys to JavaScript hashes
     // (a.k.a. objects) can apparently only be primitive values.
-    var [observer] = observers.filter(function(v) v.prefName   == fullPrefName &&
+    var observer = observers.filter(function(v) {return v.prefName   == fullPrefName &&
                                                   v.callback   == callback &&
-                                                  v.thisObject == thisObject);
+                                                  v.thisObject == thisObject;})[0];
 
     if (observer) {
       Preferences._prefSvc.removeObserver(fullPrefName, observer);
@@ -439,7 +439,7 @@ Preferences.prototype = {
       prefSvc = prefSvc.getBranch(this._prefBranch);
     }
 
-    this.__defineGetter__("_prefSvc", function() prefSvc);
+    this.__defineGetter__("_prefSvc", function() {return prefSvc;});
     return this._prefSvc;
   },
 
@@ -450,7 +450,7 @@ Preferences.prototype = {
   get _ioSvc() {
     var ioSvc = Cc["@mozilla.org/network/io-service;1"].
                 getService(Ci.nsIIOService);
-    this.__defineGetter__("_ioSvc", function() ioSvc);
+    this.__defineGetter__("_ioSvc", function() {return ioSvc;});
     return this._ioSvc;
   },
 
@@ -461,7 +461,7 @@ Preferences.prototype = {
   get _contentPrefSvc() {
     var contentPrefSvc = Cc["@mozilla.org/content-pref/service;1"].
                          getService(Ci.nsIContentPrefService);
-    this.__defineGetter__("_contentPrefSvc", function() contentPrefSvc);
+    this.__defineGetter__("_contentPrefSvc", function() {return contentPrefSvc;});
     return this._contentPrefSvc;
   }
 
@@ -498,7 +498,7 @@ PrefObserver.prototype = {
     // The pref service only observes whole branches, but we only observe
     // individual preferences, so we check here that the pref that changed
     // is the exact one we're observing (and not some sub-pref on the branch).
-    if (data.indexOf(this.prefName) != 0)
+    if (data.indexOf(this.prefName) !== 0)
       return;
 
     if (typeof this.callback == "function") {
@@ -518,6 +518,6 @@ function isObject(val) {
   // We can't check for |val.constructor == Object| here, since the value
   // might be from a different context whose Object constructor is not the same
   // as ours, so instead we match based on the name of the constructor.
-  return (typeof val != "undefined" && val != null && typeof val == "object" &&
+  return (typeof val != "undefined" && val !== null && typeof val == "object" &&
           val.constructor.name == "Object");
 }
