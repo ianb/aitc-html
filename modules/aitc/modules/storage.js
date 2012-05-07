@@ -193,7 +193,7 @@ AitcQueue.prototype = {
       this._writeLock = false;
       cb(msg);
     }
-  }
+  },
 };
 
 /**
@@ -383,7 +383,7 @@ AitcStorageImpl.prototype = {
 
       callback(err, manifest);
     });
-  }
+  },
 
 };
 

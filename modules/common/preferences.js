@@ -62,6 +62,8 @@ function Preferences(args) {
     }
     else if (args)
       this._prefBranch = args;
+    this._initPrefSvc();
+    this._initContentSvc();
 }
 
 Preferences.prototype = {
@@ -150,16 +152,13 @@ Preferences.prototype = {
 
   _set: function(prefName, prefValue) {
     var prefType;
-    if (typeof prefValue != "undefined" && prefValue !== null)
+    if (typeof prefValue != "undefined" && prefValue != null)
       prefType = prefValue.constructor.name;
 
     switch (prefType) {
       case "String":
         {
-          var string = Cc["@mozilla.org/supports-string;1"].
-                       createInstance(Ci.nsISupportsString);
-          string.data = prefValue;
-          this._prefSvc.setComplexValue(prefName, Ci.nsISupportsString, string);
+          this._prefSvc.setComplexValue(prefName, prefValue);
         }
         break;
 
@@ -174,7 +173,7 @@ Preferences.prototype = {
                 "32-bit integer range -(2^31-1) to 2^31-1.  To store numbers " +
                 "outside that range, store them as strings.");
         this._prefSvc.setIntPref(prefName, prefValue);
-        if (prefValue % 1 !== 0)
+        if (prefValue % 1 != 0)
           Cu.reportError("Warning: setting the " + prefName + " pref to the " +
                          "non-integer number " + prefValue + " converted it " +
                          "to the integer number " + this.get(prefName) +
@@ -430,7 +429,7 @@ Preferences.prototype = {
    * Preferences Service
    * @private
    */
-  get _prefSvc() {
+  _initPrefSvc: function () {
     var prefSvc = Cc["@mozilla.org/preferences-service;1"]
                   .getService(Ci.nsIPrefService);
     if (this._defaultBranch) {
@@ -439,8 +438,7 @@ Preferences.prototype = {
       prefSvc = prefSvc.getBranch(this._prefBranch);
     }
 
-    this.__defineGetter__("_prefSvc", function() {return prefSvc;});
-    return this._prefSvc;
+    return this._prefSvc = prefSvc;
   },
 
   /**
@@ -450,19 +448,17 @@ Preferences.prototype = {
   get _ioSvc() {
     var ioSvc = Cc["@mozilla.org/network/io-service;1"].
                 getService(Ci.nsIIOService);
-    this.__defineGetter__("_ioSvc", function() {return ioSvc;});
-    return this._ioSvc;
+    return ioSvc;
   },
 
   /**
    * Site Preferences Service
    * @private
    */
-  get _contentPrefSvc() {
+  _initContentPrefSvc: function _initContentPrefSvc() {
     var contentPrefSvc = Cc["@mozilla.org/content-pref/service;1"].
                          getService(Ci.nsIContentPrefService);
-    this.__defineGetter__("_contentPrefSvc", function() {return contentPrefSvc;});
-    return this._contentPrefSvc;
+    this._contentPrefSvc = contentPrefSvc;
   }
 
 };
@@ -492,13 +488,12 @@ function PrefObserver(prefName, callback, thisObject) {
 }
 
 PrefObserver.prototype = {
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver, Ci.nsISupportsWeakReference]),
 
   observe: function(subject, topic, data) {
     // The pref service only observes whole branches, but we only observe
     // individual preferences, so we check here that the pref that changed
     // is the exact one we're observing (and not some sub-pref on the branch).
-    if (data.indexOf(this.prefName) !== 0)
+    if (data.indexOf(this.prefName) != 0)
       return;
 
     if (typeof this.callback == "function") {
@@ -518,6 +513,6 @@ function isObject(val) {
   // We can't check for |val.constructor == Object| here, since the value
   // might be from a different context whose Object constructor is not the same
   // as ours, so instead we match based on the name of the constructor.
-  return (typeof val != "undefined" && val !== null && typeof val == "object" &&
+  return (typeof val != "undefined" && val != null && typeof val == "object" &&
           val.constructor.name == "Object");
 }

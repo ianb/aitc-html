@@ -164,7 +164,7 @@ AitcManager.prototype = {
       {
         notify: function _getTimerNotify() {
           self._checkServer();
-        }
+        },
       }, getFreq, Ci.nsITimer.TYPE_REPEATING_SLACK
     );
     this._log.info("GET timer set, next attempt in " + getFreq + "ms");
@@ -425,10 +425,10 @@ AitcManager.prototype = {
     }
 
     // Check if we can get assertion silently first
-    self._log.info("Attempting to obtain assertion silently")
+    self._log.info("Attempting to obtain assertion silently");
     BrowserID.getAssertion(gotSilentAssertion, {
       audience: this.DASHBOARD, sameEmailAs: this.MARKETPLACE
     });
-  }
+  },
 
 };

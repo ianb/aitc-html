@@ -1,6 +1,6 @@
 diff --recursive -w -u orig-modules/aitc/modules/client.js modules/aitc/modules/client.js
---- orig-modules/aitc/modules/client.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/aitc/modules/client.js	2012-05-02 17:57:27.000000000 -0500
+--- orig-modules/aitc/modules/client.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/aitc/modules/client.js	2012-05-07 10:39:38.000000000 -0500
 @@ -120,7 +120,8 @@
  
          // Convert apps from remote to local format
@@ -51,46 +51,21 @@ diff --recursive -w -u orig-modules/aitc/modules/client.js modules/aitc/modules/
  
      if (lastReq + (backoff * 1000) < time) {
        this._log.warn("X-Backoff is " + backoff + ", not making request");
-@@ -300,5 +303,5 @@
-       this._backoff = true;
-       PREFS.set("backoff", backoff + "");
-     }
--  },
-+  }
- };
-\ No newline at end of file
 diff --recursive -w -u orig-modules/aitc/modules/manager.js modules/aitc/modules/manager.js
---- orig-modules/aitc/modules/manager.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/aitc/modules/manager.js	2012-05-02 17:54:47.000000000 -0500
-@@ -164,7 +164,7 @@
-       {
-         notify: function _getTimerNotify() {
-           self._checkServer();
--        },
-+        }
-       }, getFreq, Ci.nsITimer.TYPE_REPEATING_SLACK
-     );
-     this._log.info("GET timer set, next attempt in " + getFreq + "ms");
-@@ -429,6 +429,6 @@
+--- orig-modules/aitc/modules/manager.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/aitc/modules/manager.js	2012-05-07 10:40:19.000000000 -0500
+@@ -425,7 +425,7 @@
+     }
+ 
+     // Check if we can get assertion silently first
+-    self._log.info("Attempting to obtain assertion silently")
++    self._log.info("Attempting to obtain assertion silently");
      BrowserID.getAssertion(gotSilentAssertion, {
        audience: this.DASHBOARD, sameEmailAs: this.MARKETPLACE
      });
--  },
-+  }
- 
- };
 diff --recursive -w -u orig-modules/aitc/modules/storage.js modules/aitc/modules/storage.js
---- orig-modules/aitc/modules/storage.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/aitc/modules/storage.js	2012-05-02 17:54:27.000000000 -0500
-@@ -193,7 +193,7 @@
-       this._writeLock = false;
-       cb(msg);
-     }
--  },
-+  }
- };
- 
- /**
+--- orig-modules/aitc/modules/storage.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/aitc/modules/storage.js	2012-05-07 10:40:45.000000000 -0500
 @@ -244,7 +244,8 @@
      var localApps = {};
      
@@ -111,28 +86,41 @@ diff --recursive -w -u orig-modules/aitc/modules/storage.js modules/aitc/modules
        // Don't delete apps that are both local & remote.
        var origin = app.origin;
        delete toDelete[origin];
-@@ -381,7 +383,7 @@
- 
-       callback(err, manifest);
-     });
--  },
-+  }
- 
- };
- 
 diff --recursive -w -u orig-modules/common/log4moz.js modules/common/log4moz.js
---- orig-modules/common/log4moz.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/common/log4moz.js	2012-05-02 17:53:11.000000000 -0500
-@@ -185,7 +185,7 @@
+--- orig-modules/common/log4moz.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/common/log4moz.js	2012-05-07 10:28:19.000000000 -0500
+@@ -93,28 +93,13 @@
+   Appender: Appender,
+   DumpAppender: DumpAppender,
+   ConsoleAppender: ConsoleAppender,
+-  BlockingStreamAppender: BlockingStreamAppender,
+-  StorageStreamAppender: StorageStreamAppender,
+-
+-  // Discouraged due to blocking I/O.
+-  FileAppender: FileAppender,
+-  RotatingFileAppender: RotatingFileAppender,
  
-   _level: null,
-   get level() {
--    if (this._level != null)
-+    if (this._level !== null)
-       return this._level;
-     if (this.parent)
-       return this.parent.level;
-@@ -197,7 +197,7 @@
+   // Logging helper:
+   // var logger = Log4Moz.repository.getLogger("foo");
+   // logger.info(Log4Moz.enumerateInterfaces(someObject).join(","));
++  // HTML: not applicable, changed to do nothing
+   enumerateInterfaces: function Log4Moz_enumerateInterfaces(aObject) {
+-    var interfaces = [];
+-
+-    for (i in Ci) {
+-      try {
+-        aObject.QueryInterface(Ci[i]);
+-        interfaces.push(i);
+-      }
+-      catch(ex) {}
+-    }
+-
+-    return interfaces;
++    return [];
+   },
+ 
+   // Logging helper:
+@@ -197,7 +182,7 @@
    },
  
    _parent: null,
@@ -141,18 +129,233 @@ diff --recursive -w -u orig-modules/common/log4moz.js modules/common/log4moz.js
    set parent(parent) {
      if (this._parent == parent) {
        return;
-@@ -335,7 +335,7 @@
+@@ -428,212 +413,25 @@
+   __proto__: Appender.prototype,
  
-     // trigger updates for any possible descendants of this logger
-     for (var logger in this._loggers) {
--      if (logger != name && logger.indexOf(name) == 0)
-+      if (logger != name && logger.indexOf(name) === 0)
-         this._updateParents(logger);
+   doAppend: function CApp_doAppend(message) {
+-    if (message.level > Log4Moz.Level.Warn) {
+-      Cu.reportError(message);
++    if (! window.console) {
+       return;
      }
-   },
+-    Cc["@mozilla.org/consoleservice;1"].
+-      getService(Ci.nsIConsoleService).logStringMessage(message);
+-  }
+-};
+-
+-/**
+- * Base implementation for stream based appenders.
+- *
+- * Caution: This writes to the output stream synchronously, thus logging calls
+- * block as the data is written to the stream. This can have negligible impact
+- * for in-memory streams, but should be taken into account for I/O streams
+- * (files, network, etc.)
+- */
+-function BlockingStreamAppender(formatter) {
+-  this._name = "BlockingStreamAppender";
+-  Appender.call(this, formatter);
+-}
+-BlockingStreamAppender.prototype = {
+-  __proto__: Appender.prototype,
+-
+-  _converterStream: null, // holds the nsIConverterOutputStream
+-  _outputStream: null,    // holds the underlying nsIOutputStream
+-
+-  /**
+-   * Output stream to write to.
+-   *
+-   * This will automatically open the stream if it doesn't exist yet by
+-   * calling newOutputStream. The resulting raw stream is wrapped in a
+-   * nsIConverterOutputStream to ensure text is written as UTF-8.
+-   */
+-  get outputStream() {
+-    if (!this._outputStream) {
+-      // First create a raw stream. We can bail out early if that fails.
+-      this._outputStream = this.newOutputStream();
+-      if (!this._outputStream) {
+-        return null;
+-      }
+-
+-      // Wrap the raw stream in an nsIConverterOutputStream. We can reuse
+-      // the instance if we already have one.
+-      if (!this._converterStream) {
+-        this._converterStream = Cc["@mozilla.org/intl/converter-output-stream;1"]
+-                                  .createInstance(Ci.nsIConverterOutputStream);
+-      }
+-      this._converterStream.init(
+-        this._outputStream, "UTF-8", STREAM_SEGMENT_SIZE,
+-        Ci.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
+-    }
+-    return this._converterStream;
+-  },
+-
+-  newOutputStream: function newOutputStream() {
+-    throw "Stream-based appenders need to implement newOutputStream()!";
+-  },
+-
+-  reset: function reset() {
+-    if (!this._outputStream) {
++    if (console.error && message.level >= Log4Moz.Level.Error) {
++      console.error(message);
+       return;
+     }
+-    this.outputStream.close();
+-    this._outputStream = null;
+-  },
+-
+-  doAppend: function doAppend(message) {
+-    if (!message) {
++    if (console.warn && message.level >= Log4Moz.Level.Warn) {
++      console.warn(message);
+       return;
+     }
+-    try {
+-      this.outputStream.writeString(message);
+-    } catch(ex) {
+-      if (ex.result == Cr.NS_BASE_STREAM_CLOSED) {
+-        // The underlying output stream is closed, so let's open a new one
+-        // and try again.
+-        this._outputStream = null;
+-        try {
+-          this.outputStream.writeString(message);
+-        } catch (ex) {
+-          // Ah well, we tried, but something seems to be hosed permanently.
+-        }
+-      }
+-    }
+-  }
+-};
+-
+-/**
+- * Append to an nsIStorageStream
+- *
+- * This writes logging output to an in-memory stream which can later be read
+- * back as an nsIInputStream. It can be used to avoid expensive I/O operations
+- * during logging. Instead, one can periodically consume the input stream and
+- * e.g. write it to disk asynchronously.
+- */
+-function StorageStreamAppender(formatter) {
+-  this._name = "StorageStreamAppender";
+-  BlockingStreamAppender.call(this, formatter);
+-}
+-StorageStreamAppender.prototype = {
+-  __proto__: BlockingStreamAppender.prototype,
+-
+-  _ss: null,
+-  newOutputStream: function newOutputStream() {
+-    var ss = this._ss = Cc["@mozilla.org/storagestream;1"]
+-                          .createInstance(Ci.nsIStorageStream);
+-    ss.init(STREAM_SEGMENT_SIZE, PR_UINT32_MAX, null);
+-    return ss.getOutputStream(0);
+-  },
+-
+-  getInputStream: function getInputStream() {
+-    if (!this._ss) {
+-      return null;
+-    }
+-    return this._ss.newInputStream(0);
+-  },
+-
+-  reset: function reset() {
+-    BlockingStreamAppender.prototype.reset.call(this);
+-    this._ss = null;
+-  }
+-};
+-
+-/**
+- * File appender (discouraged)
+- *
+- * Writes otuput to a file using a regular nsIFileOutputStream (as opposed
+- * to nsISafeFileOutputStream, since immediate durability is typically not
+- * needed for logs.) Note that I/O operations block the logging caller.
+- */
+-function FileAppender(file, formatter) {
+-  this._name = "FileAppender";
+-  this._file = file; // nsIFile
+-  BlockingStreamAppender.call(this, formatter);
+-}
+-FileAppender.prototype = {
+-  __proto__: BlockingStreamAppender.prototype,
+-
+-  newOutputStream: function newOutputStream() {
+-    try {
+-      return FileUtils.openFileOutputStream(this._file);
+-    } catch(e) {
+-      return null;
+-    }
+-  },
+-
+-  reset: function reset() {
+-    BlockingStreamAppender.prototype.reset.call(this);
+-    try {
+-      this._file.remove(false);
+-    } catch (e) {
+-      // File didn't exist in the first place, or we're on Windows. Meh.
+-    }
+-  }
+-};
+-
+-/**
+- * Rotating file appender (discouraged)
+- *
+- * Similar to FileAppender, but rotates logs when they become too large.
+- */
+-function RotatingFileAppender(file, formatter, maxSize, maxBackups) {
+-  if (maxSize === undefined)
+-    maxSize = ONE_MEGABYTE * 2;
+-
+-  if (maxBackups === undefined)
+-    maxBackups = 0;
+-
+-  this._name = "RotatingFileAppender";
+-  FileAppender.call(this, file, formatter);
+-  this._maxSize = maxSize;
+-  this._maxBackups = maxBackups;
+-}
+-RotatingFileAppender.prototype = {
+-  __proto__: FileAppender.prototype,
+-
+-  doAppend: function doAppend(message) {
+-    FileAppender.prototype.doAppend.call(this, message);
+-    try {
+-      this.rotateLogs();
+-    } catch(e) {
+-      dump("Error writing file:" + e + "\n");
+-    }
+-  },
+-
+-  rotateLogs: function rotateLogs() {
+-    if (this._file.exists() && this._file.fileSize < this._maxSize) {
++    if (console.info && message.level >= Log4Moz.Level.Info) {
++      console.info(message);
+       return;
+     }
+-
+-    BlockingStreamAppender.prototype.reset.call(this);
+-
+-    for (var i = this.maxBackups - 1; i > 0; i--) {
+-      var backup = this._file.parent.clone();
+-      backup.append(this._file.leafName + "." + i);
+-      if (backup.exists()) {
+-        backup.moveTo(this._file.parent, this._file.leafName + "." + (i + 1));
+-      }
+-    }
+-
+-    var cur = this._file.clone();
+-    if (cur.exists()) {
+-      cur.moveTo(cur.parent, cur.leafName + ".1");
++    if (console.debug && message.level <= Log4Moz.Level.Debug) {
++      console.debug(message);
++      return;
+     }
+-
+-    // Note: this._file still points to the same file
++    console.log(message);
+   }
+ };
 diff --recursive -w -u orig-modules/common/observers.js modules/common/observers.js
---- orig-modules/common/observers.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/common/observers.js	2012-05-02 17:52:33.000000000 -0500
+--- orig-modules/common/observers.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/common/observers.js	2012-05-04 17:03:56.000000000 -0500
 @@ -91,9 +91,9 @@
      // we can make it.  We could index by topic, but we can't index by callback
      // or thisObject, as far as I know, since the keys to JavaScript hashes
@@ -165,10 +368,35 @@ diff --recursive -w -u orig-modules/common/observers.js modules/common/observers
      if (observer) {
        this._service.removeObserver(observer, topic);
        this._cache.splice(this._cache.indexOf(observer), 1);
+@@ -146,7 +146,6 @@
+ }
+ 
+ Observer.prototype = {
+-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver, Ci.nsISupportsWeakReference]),
+   observe: function(subject, topic, data) {
+     // Extract the wrapped object for subjects that are one of our wrappers
+     // around a JS object.  This way we support both wrapped subjects created
+@@ -177,7 +176,6 @@
+ }
+ 
+ Subject.prototype = {
+-  QueryInterface: XPCOMUtils.generateQI([]),
+   getHelperForLanguage: function() {},
+   getInterfaces: function() {}
+ };
 diff --recursive -w -u orig-modules/common/preferences.js modules/common/preferences.js
---- orig-modules/common/preferences.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/common/preferences.js	2012-05-02 17:52:00.000000000 -0500
-@@ -78,7 +78,7 @@
+--- orig-modules/common/preferences.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/common/preferences.js	2012-05-07 10:36:32.000000000 -0500
+@@ -62,6 +62,8 @@
+     }
+     else if (args)
+       this._prefBranch = args;
++    this._initPrefSvc();
++    this._initContentSvc();
+ }
+ 
+ Preferences.prototype = {
+@@ -78,7 +80,7 @@
     */
    get: function(prefName, defaultValue) {
      if (Array.isArray(prefName))
@@ -177,7 +405,7 @@ diff --recursive -w -u orig-modules/common/preferences.js modules/common/prefere
  
      if (this._site)
        return this._siteGet(prefName, defaultValue);
-@@ -137,8 +137,8 @@
+@@ -137,8 +139,8 @@
     */
    set: function(prefName, prefValue) {
      if (isObject(prefName)) {
@@ -188,25 +416,19 @@ diff --recursive -w -u orig-modules/common/preferences.js modules/common/prefere
        return;
      }
  
-@@ -150,7 +150,7 @@
- 
-   _set: function(prefName, prefValue) {
-     var prefType;
--    if (typeof prefValue != "undefined" && prefValue != null)
-+    if (typeof prefValue != "undefined" && prefValue !== null)
-       prefType = prefValue.constructor.name;
- 
+@@ -156,10 +158,7 @@
      switch (prefType) {
-@@ -174,7 +174,7 @@
-                 "32-bit integer range -(2^31-1) to 2^31-1.  To store numbers " +
-                 "outside that range, store them as strings.");
-         this._prefSvc.setIntPref(prefName, prefValue);
--        if (prefValue % 1 != 0)
-+        if (prefValue % 1 !== 0)
-           Cu.reportError("Warning: setting the " + prefName + " pref to the " +
-                          "non-integer number " + prefValue + " converted it " +
-                          "to the integer number " + this.get(prefName) +
-@@ -258,7 +258,7 @@
+       case "String":
+         {
+-          var string = Cc["@mozilla.org/supports-string;1"].
+-                       createInstance(Ci.nsISupportsString);
+-          string.data = prefValue;
+-          this._prefSvc.setComplexValue(prefName, Ci.nsISupportsString, string);
++          this._prefSvc.setComplexValue(prefName, prefValue);
+         }
+         break;
+ 
+@@ -258,7 +257,7 @@
  
    reset: function(prefName) {
      if (Array.isArray(prefName)) {
@@ -215,7 +437,7 @@ diff --recursive -w -u orig-modules/common/preferences.js modules/common/prefere
        return;
      }
  
-@@ -390,9 +390,9 @@
+@@ -390,9 +389,9 @@
      // make it.  We could index by fullBranch, but we can't index by callback
      // or thisObject, as far as I know, since the keys to JavaScript hashes
      // (a.k.a. objects) can apparently only be primitive values.
@@ -227,54 +449,93 @@ diff --recursive -w -u orig-modules/common/preferences.js modules/common/prefere
  
      if (observer) {
        Preferences._prefSvc.removeObserver(fullPrefName, observer);
-@@ -439,7 +439,7 @@
+@@ -430,7 +429,7 @@
+    * Preferences Service
+    * @private
+    */
+-  get _prefSvc() {
++  _initPrefSvc: function () {
+     var prefSvc = Cc["@mozilla.org/preferences-service;1"]
+                   .getService(Ci.nsIPrefService);
+     if (this._defaultBranch) {
+@@ -439,8 +438,7 @@
        prefSvc = prefSvc.getBranch(this._prefBranch);
      }
  
 -    this.__defineGetter__("_prefSvc", function() prefSvc);
-+    this.__defineGetter__("_prefSvc", function() {return prefSvc;});
-     return this._prefSvc;
+-    return this._prefSvc;
++    return this._prefSvc = prefSvc;
    },
  
-@@ -450,7 +450,7 @@
+   /**
+@@ -450,19 +448,17 @@
    get _ioSvc() {
      var ioSvc = Cc["@mozilla.org/network/io-service;1"].
                  getService(Ci.nsIIOService);
 -    this.__defineGetter__("_ioSvc", function() ioSvc);
-+    this.__defineGetter__("_ioSvc", function() {return ioSvc;});
-     return this._ioSvc;
+-    return this._ioSvc;
++    return ioSvc;
    },
  
-@@ -461,7 +461,7 @@
-   get _contentPrefSvc() {
+   /**
+    * Site Preferences Service
+    * @private
+    */
+-  get _contentPrefSvc() {
++  _initContentPrefSvc: function _initContentPrefSvc() {
      var contentPrefSvc = Cc["@mozilla.org/content-pref/service;1"].
                           getService(Ci.nsIContentPrefService);
 -    this.__defineGetter__("_contentPrefSvc", function() contentPrefSvc);
-+    this.__defineGetter__("_contentPrefSvc", function() {return contentPrefSvc;});
-     return this._contentPrefSvc;
+-    return this._contentPrefSvc;
++    this._contentPrefSvc = contentPrefSvc;
    }
  
-@@ -498,7 +498,7 @@
-     // The pref service only observes whole branches, but we only observe
-     // individual preferences, so we check here that the pref that changed
-     // is the exact one we're observing (and not some sub-pref on the branch).
--    if (data.indexOf(this.prefName) != 0)
-+    if (data.indexOf(this.prefName) !== 0)
-       return;
- 
-     if (typeof this.callback == "function") {
-@@ -518,6 +518,6 @@
-   // We can't check for |val.constructor == Object| here, since the value
-   // might be from a different context whose Object constructor is not the same
-   // as ours, so instead we match based on the name of the constructor.
--  return (typeof val != "undefined" && val != null && typeof val == "object" &&
-+  return (typeof val != "undefined" && val !== null && typeof val == "object" &&
-           val.constructor.name == "Object");
+ };
+@@ -492,7 +488,6 @@
  }
+ 
+ PrefObserver.prototype = {
+-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver, Ci.nsISupportsWeakReference]),
+ 
+   observe: function(subject, topic, data) {
+     // The pref service only observes whole branches, but we only observe
 diff --recursive -w -u orig-modules/common/rest.js modules/common/rest.js
---- orig-modules/common/rest.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/common/rest.js	2012-05-02 17:47:56.000000000 -0500
-@@ -231,7 +231,7 @@
+--- orig-modules/common/rest.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/common/rest.js	2012-05-07 10:41:32.000000000 -0500
+@@ -79,8 +79,8 @@
+ 
+   // If we don't have an nsIURI object yet, make one. This will throw if
+   // 'uri' isn't a valid URI string.
+-  if (!(uri instanceof Ci.nsIURI)) {
+-    uri = Services.io.newURI(uri, null, null);
++  if (!(uri instanceof ioSvc.nsIURI)) {
++    uri = ioSvc.newURI(uri, null, null);
+   }
+   this.uri = uri;
+ 
+@@ -93,12 +93,6 @@
+ 
+   _logName: "Services.Common.RESTRequest",
+ 
+-  QueryInterface: XPCOMUtils.generateQI([
+-    Ci.nsIBadCertListener2,
+-    Ci.nsIInterfaceRequestor,
+-    Ci.nsIChannelEventSink
+-  ]),
+-
+   /*** Public API: ***/
+ 
+   /**
+@@ -119,7 +113,7 @@
+   /**
+    * nsIRequest load flags. Don't do any caching by default.
+    */
+-  loadFlags: Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING,
++  //loadFlags: Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING,
+ 
+   /**
+    * nsIHttpChannel
+@@ -231,7 +225,7 @@
     *
     * @return the request object.
     */
@@ -283,16 +544,18 @@ diff --recursive -w -u orig-modules/common/rest.js modules/common/rest.js
      return this.dispatch("DELETE", null, onComplete, onProgress);
    },
  
-@@ -615,5 +615,5 @@
-     return RESTRequest.prototype.dispatch.call(
-       this, method, data, onComplete, onProgress
-     );
--  },
-+  }
- };
+@@ -336,7 +330,7 @@
+                                      Cr.NS_ERROR_NET_TIMEOUT);
+     if (!this.onComplete) {
+       this._log.error("Unexpected error: onComplete not defined in " +
+-                      "abortTimeout.")
++                      "abortTimeout.");
+       return;
+     }
+     this.onComplete(error);
 diff --recursive -w -u orig-modules/common/utils.js modules/common/utils.js
---- orig-modules/common/utils.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/common/utils.js	2012-05-02 17:45:42.000000000 -0500
+--- orig-modules/common/utils.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/common/utils.js	2012-05-07 10:41:46.000000000 -0500
 @@ -149,7 +149,11 @@
    },
  
@@ -318,15 +581,6 @@ diff --recursive -w -u orig-modules/common/utils.js modules/common/utils.js
        ret += key[c[0] >> 3]
             + key[((c[0] << 2) & 0x1f) | (c[1] >> 6)]
             + key[(c[1] >> 1) & 0x1f]
-@@ -229,7 +236,7 @@
- 
-       function advance() {
-         c  = str[cOffset++];
--        if (!c || c == "" || c == "=") // Easier than range checking.
-+        if (!c || c === "" || c == "=") // Easier than range checking.
-           throw "Done";                // Will be caught far away.
-         val = key.indexOf(c);
-         if (val == -1)
 @@ -237,8 +244,9 @@
        }
  
@@ -339,18 +593,10 @@ diff --recursive -w -u orig-modules/common/utils.js modules/common/utils.js
  
        advance();
        accumulate(left(val, 3));
-@@ -299,7 +307,7 @@
-     var len = b64.length;
-     var over = len % 4;
-     return over ? atob(b64.substr(0, len - over)) : atob(b64);
--  },
-+  }
- };
- 
- XPCOMUtils.defineLazyGetter(CommonUtils, "_utf8Converter", function() {
+Only in modules: compat.js
 diff --recursive -w -u orig-modules/crypto/modules/utils.js modules/crypto/modules/utils.js
---- orig-modules/crypto/modules/utils.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/crypto/modules/utils.js	2012-05-02 17:43:07.000000000 -0500
+--- orig-modules/crypto/modules/utils.js	2012-05-07 10:42:39.000000000 -0500
++++ modules/crypto/modules/utils.js	2012-05-07 10:42:01.000000000 -0500
 @@ -42,7 +42,10 @@
     */
    digestBytes: function digestBytes(message, hasher) {
@@ -363,35 +609,7 @@ diff --recursive -w -u orig-modules/crypto/modules/utils.js modules/crypto/modul
      hasher.update(bytes, bytes.length);
      var result = hasher.finish(false);
      if (hasher instanceof Ci.nsICryptoHMAC) {
-@@ -326,7 +329,7 @@
-     }
- 
-     return header += ', ext="' + ext +'"';
--  },
-+  }
- };
- 
- XPCOMUtils.defineLazyGetter(CryptoUtils, "_utf8Converter", function() {
 Only in modules/crypto/modules: utils.js.orig
 Only in modules/crypto/modules: utils.js.rej
-diff --recursive -w -u orig-modules/identity/browserid.js modules/identity/browserid.js
---- orig-modules/identity/browserid.js	2012-05-02 17:57:37.000000000 -0500
-+++ modules/identity/browserid.js	2012-05-02 17:42:23.000000000 -0500
-@@ -305,7 +305,7 @@
-         "'email'"             +
-       "));";
-     Cu.evalInSandbox(scriptText, obj.sandbox, "1.8", ID_URI, 1);
--  },
-+  }
- };
- 
- /**
-@@ -390,7 +390,7 @@
-       null, // postData
-       null  // headers
-     );
--  },
-+  }
- };
- 
- XPCOMUtils.defineLazyGetter(this, "BrowserID", function() {
+Only in modules: eventmixin.js
+Only in modules: typed-storage.js

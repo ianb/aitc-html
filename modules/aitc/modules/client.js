@@ -303,5 +303,5 @@ AitcClient.prototype = {
       this._backoff = true;
       PREFS.set("backoff", backoff + "");
     }
-  }
+  },
 };

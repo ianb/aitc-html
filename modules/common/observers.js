@@ -146,7 +146,6 @@ function Observer(topic, callback, thisObject) {
 }
 
 Observer.prototype = {
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver, Ci.nsISupportsWeakReference]),
   observe: function(subject, topic, data) {
     // Extract the wrapped object for subjects that are one of our wrappers
     // around a JS object.  This way we support both wrapped subjects created
@@ -177,7 +176,6 @@ function Subject(object) {
 }
 
 Subject.prototype = {
-  QueryInterface: XPCOMUtils.generateQI([]),
   getHelperForLanguage: function() {},
   getInterfaces: function() {}
 };

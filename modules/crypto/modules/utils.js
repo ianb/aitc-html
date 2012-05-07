@@ -329,7 +329,7 @@ var CryptoUtils = {
     }
 
     return header += ', ext="' + ext +'"';
-  }
+  },
 };
 
 XPCOMUtils.defineLazyGetter(CryptoUtils, "_utf8Converter", function() {

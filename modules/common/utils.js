@@ -236,7 +236,7 @@ var CommonUtils = {
 
       function advance() {
         c  = str[cOffset++];
-        if (!c || c === "" || c == "=") // Easier than range checking.
+        if (!c || c == "" || c == "=") // Easier than range checking.
           throw "Done";                // Will be caught far away.
         val = key.indexOf(c);
         if (val == -1)
@@ -307,7 +307,7 @@ var CommonUtils = {
     var len = b64.length;
     var over = len % 4;
     return over ? atob(b64.substr(0, len - over)) : atob(b64);
-  }
+  },
 };
 
 XPCOMUtils.defineLazyGetter(CommonUtils, "_utf8Converter", function() {

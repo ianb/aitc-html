@@ -102,7 +102,7 @@ BrowserIDService.prototype = {
    *        (Window) A contentWindow that has a valid document loaded. If this
    *        argument is provided the user will be asked to login in the context
    *        of the document currently loaded in this window.
-   *        
+   *
    *        The audience of the assertion will be set to the domain of the
    *        loaded document, and the "audience" property in the "options"
    *        argument (if provided), will be ignored. The email to which this
@@ -137,12 +137,12 @@ BrowserIDService.prototype = {
       self._gotEmails(emails, obj, cb, options);
     }
     obj.sandbox.importFunction(callback, "callback");
-    var scriptText = 
-      "var list = window.BrowserID.User.getStoredEmailKeypairs();" + 
+    var scriptText =
+      "var list = window.BrowserID.User.getStoredEmailKeypairs();" +
       "callback(JSON.stringify(list));";
     Cu.evalInSandbox(scriptText, obj.sandbox, "1.8", ID_URI, 1);
   },
-  
+
   // Received a list of emails from BrowserID for current user
   _gotEmails: function _gotEmails(emails, obj, cb, options) {
     var keys = Object.keys(emails);
@@ -269,7 +269,7 @@ BrowserIDService.prototype = {
     obj.sandbox.importFunction(onError, "onError");
 
     self._log.info("_getAssertionWithEmail Started");
-    var scriptText = 
+    var scriptText =
       "window.BrowserID.User.getAssertion(" +
         "'" + email + "', "     +
         "'" + audience + "', "  +
@@ -299,13 +299,13 @@ BrowserIDService.prototype = {
 
     // This wil tell us which email was used to login to "domain", if any.
     self._log.info("_getAssertionWithDomain Started");
-    var scriptText = 
+    var scriptText =
       "onDomainSuccess(window.BrowserID.Storage.site.get(" +
         "'" + domain + "', "  +
         "'email'"             +
       "));";
     Cu.evalInSandbox(scriptText, obj.sandbox, "1.8", ID_URI, 1);
-  }
+  },
 };
 
 /**
@@ -360,7 +360,7 @@ BrowserIDSandbox.prototype = {
     this._frame = frame;
     this._container = doc.documentElement;
   },
-  
+
   _createSandbox: function _createSandbox(cb) {
     var self = this;
     this._frame.addEventListener(
@@ -390,7 +390,7 @@ BrowserIDSandbox.prototype = {
       null, // postData
       null  // headers
     );
-  }
+  },
 };
 
 XPCOMUtils.defineLazyGetter(this, "BrowserID", function() {

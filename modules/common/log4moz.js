@@ -93,28 +93,13 @@ var Log4Moz = {
   Appender: Appender,
   DumpAppender: DumpAppender,
   ConsoleAppender: ConsoleAppender,
-  BlockingStreamAppender: BlockingStreamAppender,
-  StorageStreamAppender: StorageStreamAppender,
-
-  // Discouraged due to blocking I/O.
-  FileAppender: FileAppender,
-  RotatingFileAppender: RotatingFileAppender,
 
   // Logging helper:
   // var logger = Log4Moz.repository.getLogger("foo");
   // logger.info(Log4Moz.enumerateInterfaces(someObject).join(","));
+  // HTML: not applicable, changed to do nothing
   enumerateInterfaces: function Log4Moz_enumerateInterfaces(aObject) {
-    var interfaces = [];
-
-    for (i in Ci) {
-      try {
-        aObject.QueryInterface(Ci[i]);
-        interfaces.push(i);
-      }
-      catch(ex) {}
-    }
-
-    return interfaces;
+    return [];
   },
 
   // Logging helper:
@@ -185,7 +170,7 @@ Logger.prototype = {
 
   _level: null,
   get level() {
-    if (this._level !== null)
+    if (this._level != null)
       return this._level;
     if (this.parent)
       return this.parent.level;
@@ -335,7 +320,7 @@ LoggerRepository.prototype = {
 
     // trigger updates for any possible descendants of this logger
     for (var logger in this._loggers) {
-      if (logger != name && logger.indexOf(name) === 0)
+      if (logger != name && logger.indexOf(name) == 0)
         this._updateParents(logger);
     }
   },
@@ -428,212 +413,25 @@ ConsoleAppender.prototype = {
   __proto__: Appender.prototype,
 
   doAppend: function CApp_doAppend(message) {
-    if (message.level > Log4Moz.Level.Warn) {
-      Cu.reportError(message);
+    if (! window.console) {
       return;
     }
-    Cc["@mozilla.org/consoleservice;1"].
-      getService(Ci.nsIConsoleService).logStringMessage(message);
-  }
-};
-
-/**
- * Base implementation for stream based appenders.
- *
- * Caution: This writes to the output stream synchronously, thus logging calls
- * block as the data is written to the stream. This can have negligible impact
- * for in-memory streams, but should be taken into account for I/O streams
- * (files, network, etc.)
- */
-function BlockingStreamAppender(formatter) {
-  this._name = "BlockingStreamAppender";
-  Appender.call(this, formatter);
-}
-BlockingStreamAppender.prototype = {
-  __proto__: Appender.prototype,
-
-  _converterStream: null, // holds the nsIConverterOutputStream
-  _outputStream: null,    // holds the underlying nsIOutputStream
-
-  /**
-   * Output stream to write to.
-   *
-   * This will automatically open the stream if it doesn't exist yet by
-   * calling newOutputStream. The resulting raw stream is wrapped in a
-   * nsIConverterOutputStream to ensure text is written as UTF-8.
-   */
-  get outputStream() {
-    if (!this._outputStream) {
-      // First create a raw stream. We can bail out early if that fails.
-      this._outputStream = this.newOutputStream();
-      if (!this._outputStream) {
-        return null;
-      }
-
-      // Wrap the raw stream in an nsIConverterOutputStream. We can reuse
-      // the instance if we already have one.
-      if (!this._converterStream) {
-        this._converterStream = Cc["@mozilla.org/intl/converter-output-stream;1"]
-                                  .createInstance(Ci.nsIConverterOutputStream);
-      }
-      this._converterStream.init(
-        this._outputStream, "UTF-8", STREAM_SEGMENT_SIZE,
-        Ci.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
-    }
-    return this._converterStream;
-  },
-
-  newOutputStream: function newOutputStream() {
-    throw "Stream-based appenders need to implement newOutputStream()!";
-  },
-
-  reset: function reset() {
-    if (!this._outputStream) {
+    if (console.error && message.level >= Log4Moz.Level.Error) {
+      console.error(message);
       return;
     }
-    this.outputStream.close();
-    this._outputStream = null;
-  },
-
-  doAppend: function doAppend(message) {
-    if (!message) {
+    if (console.warn && message.level >= Log4Moz.Level.Warn) {
+      console.warn(message);
       return;
     }
-    try {
-      this.outputStream.writeString(message);
-    } catch(ex) {
-      if (ex.result == Cr.NS_BASE_STREAM_CLOSED) {
-        // The underlying output stream is closed, so let's open a new one
-        // and try again.
-        this._outputStream = null;
-        try {
-          this.outputStream.writeString(message);
-        } catch (ex) {
-          // Ah well, we tried, but something seems to be hosed permanently.
-        }
-      }
-    }
-  }
-};
-
-/**
- * Append to an nsIStorageStream
- *
- * This writes logging output to an in-memory stream which can later be read
- * back as an nsIInputStream. It can be used to avoid expensive I/O operations
- * during logging. Instead, one can periodically consume the input stream and
- * e.g. write it to disk asynchronously.
- */
-function StorageStreamAppender(formatter) {
-  this._name = "StorageStreamAppender";
-  BlockingStreamAppender.call(this, formatter);
-}
-StorageStreamAppender.prototype = {
-  __proto__: BlockingStreamAppender.prototype,
-
-  _ss: null,
-  newOutputStream: function newOutputStream() {
-    var ss = this._ss = Cc["@mozilla.org/storagestream;1"]
-                          .createInstance(Ci.nsIStorageStream);
-    ss.init(STREAM_SEGMENT_SIZE, PR_UINT32_MAX, null);
-    return ss.getOutputStream(0);
-  },
-
-  getInputStream: function getInputStream() {
-    if (!this._ss) {
-      return null;
-    }
-    return this._ss.newInputStream(0);
-  },
-
-  reset: function reset() {
-    BlockingStreamAppender.prototype.reset.call(this);
-    this._ss = null;
-  }
-};
-
-/**
- * File appender (discouraged)
- *
- * Writes otuput to a file using a regular nsIFileOutputStream (as opposed
- * to nsISafeFileOutputStream, since immediate durability is typically not
- * needed for logs.) Note that I/O operations block the logging caller.
- */
-function FileAppender(file, formatter) {
-  this._name = "FileAppender";
-  this._file = file; // nsIFile
-  BlockingStreamAppender.call(this, formatter);
-}
-FileAppender.prototype = {
-  __proto__: BlockingStreamAppender.prototype,
-
-  newOutputStream: function newOutputStream() {
-    try {
-      return FileUtils.openFileOutputStream(this._file);
-    } catch(e) {
-      return null;
-    }
-  },
-
-  reset: function reset() {
-    BlockingStreamAppender.prototype.reset.call(this);
-    try {
-      this._file.remove(false);
-    } catch (e) {
-      // File didn't exist in the first place, or we're on Windows. Meh.
-    }
-  }
-};
-
-/**
- * Rotating file appender (discouraged)
- *
- * Similar to FileAppender, but rotates logs when they become too large.
- */
-function RotatingFileAppender(file, formatter, maxSize, maxBackups) {
-  if (maxSize === undefined)
-    maxSize = ONE_MEGABYTE * 2;
-
-  if (maxBackups === undefined)
-    maxBackups = 0;
-
-  this._name = "RotatingFileAppender";
-  FileAppender.call(this, file, formatter);
-  this._maxSize = maxSize;
-  this._maxBackups = maxBackups;
-}
-RotatingFileAppender.prototype = {
-  __proto__: FileAppender.prototype,
-
-  doAppend: function doAppend(message) {
-    FileAppender.prototype.doAppend.call(this, message);
-    try {
-      this.rotateLogs();
-    } catch(e) {
-      dump("Error writing file:" + e + "\n");
-    }
-  },
-
-  rotateLogs: function rotateLogs() {
-    if (this._file.exists() && this._file.fileSize < this._maxSize) {
+    if (console.info && message.level >= Log4Moz.Level.Info) {
+      console.info(message);
       return;
     }
-
-    BlockingStreamAppender.prototype.reset.call(this);
-
-    for (var i = this.maxBackups - 1; i > 0; i--) {
-      var backup = this._file.parent.clone();
-      backup.append(this._file.leafName + "." + i);
-      if (backup.exists()) {
-        backup.moveTo(this._file.parent, this._file.leafName + "." + (i + 1));
-      }
+    if (console.debug && message.level <= Log4Moz.Level.Debug) {
+      console.debug(message);
+      return;
     }
-
-    var cur = this._file.clone();
-    if (cur.exists()) {
-      cur.moveTo(cur.parent, cur.leafName + ".1");
-    }
-
-    // Note: this._file still points to the same file
+    console.log(message);
   }
 };

@@ -79,8 +79,8 @@ function RESTRequest(uri) {
 
   // If we don't have an nsIURI object yet, make one. This will throw if
   // 'uri' isn't a valid URI string.
-  if (!(uri instanceof Ci.nsIURI)) {
-    uri = Services.io.newURI(uri, null, null);
+  if (!(uri instanceof ioSvc.nsIURI)) {
+    uri = ioSvc.newURI(uri, null, null);
   }
   this.uri = uri;
 
@@ -92,12 +92,6 @@ function RESTRequest(uri) {
 RESTRequest.prototype = {
 
   _logName: "Services.Common.RESTRequest",
-
-  QueryInterface: XPCOMUtils.generateQI([
-    Ci.nsIBadCertListener2,
-    Ci.nsIInterfaceRequestor,
-    Ci.nsIChannelEventSink
-  ]),
 
   /*** Public API: ***/
 
@@ -119,7 +113,7 @@ RESTRequest.prototype = {
   /**
    * nsIRequest load flags. Don't do any caching by default.
    */
-  loadFlags: Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING,
+  //loadFlags: Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING,
 
   /**
    * nsIHttpChannel
@@ -336,7 +330,7 @@ RESTRequest.prototype = {
                                      Cr.NS_ERROR_NET_TIMEOUT);
     if (!this.onComplete) {
       this._log.error("Unexpected error: onComplete not defined in " +
-                      "abortTimeout.")
+                      "abortTimeout.");
       return;
     }
     this.onComplete(error);
@@ -615,5 +609,5 @@ TokenAuthenticatedRESTRequest.prototype = {
     return RESTRequest.prototype.dispatch.call(
       this, method, data, onComplete, onProgress
     );
-  }
+  },
 };
